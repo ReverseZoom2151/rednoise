@@ -11,15 +11,17 @@ glm::vec3 Camera::toCameraSpace(const glm::vec3 &vertex) const {
 	return glm::transpose(orientation) * (vertex - position);
 }
 
-CanvasPoint Camera::projectVertex(const glm::vec3 &vertex) const {
-	glm::vec3 cam = toCameraSpace(vertex);
+CanvasPoint Camera::projectCameraPoint(const glm::vec3 &cam) const {
 	// In front of the camera means cam.z < 0. Report a positive depth so a
 	// smaller depth is closer, which suits a simple z-buffer.
 	float depth = -cam.z;
 	float u = -focalLength * (cam.x / cam.z) * scale + imageWidth / 2.0f;
 	float v = focalLength * (cam.y / cam.z) * scale + imageHeight / 2.0f;
-	CanvasPoint point(u, v, depth);
-	return point;
+	return CanvasPoint(u, v, depth);
+}
+
+CanvasPoint Camera::projectVertex(const glm::vec3 &vertex) const {
+	return projectCameraPoint(toCameraSpace(vertex));
 }
 
 void Camera::lookAt(const glm::vec3 &target) {

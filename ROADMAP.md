@@ -91,8 +91,8 @@ fully-shaded ray tracer and beyond.
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| Backface culling | Skip triangles facing away from the camera. | ● | CG, 15 |
-| View-frustum / near-plane clipping | Clip geometry crossing the camera plane (fixes projection blowups). | ●●● | 15, CG |
+| [done] Backface culling | Skip triangles facing away from the camera. | ● | CG, 15 |
+| [done] Near-plane clipping | Clip geometry crossing the camera plane (fixes projection blowups). | ●●● | 15, CG |
 | [done] BVH / kd-tree / octree | Spatial acceleration so raytracing scales past brute force O(n). | ●●●● | 15 |
 | [done] Multithreading (OpenMP) | Parallelise the pixel loop; near-linear speedup. | ●● | CG, 15 |
 | GPU (OpenCL / compute) | Offload tracing to the GPU for real-time. | ●●●●● | 15 |

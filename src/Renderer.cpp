@@ -5,82 +5,110 @@
 #include "Geometry.h"
 #include "Noise.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <glm/glm.hpp>
 #include <utility>
 #include <vector>
-
-// Project a triangle's three vertices. Returns false if any vertex is level with
-// or behind the camera (no near-plane clipping yet - that whole triangle is
-// simply dropped).
-static bool projectTriangle(const ModelTriangle &tri, const Camera &camera, CanvasPoint out[3]) {
-	for (int i = 0; i < 3; i++) {
-		out[i] = camera.projectVertex(tri.vertices[i]);
-		if (out[i].depth <= 0.0f)
-			return false;
-	}
-	return true;
-}
 
 // Signed area of triangle (a, b, p) x2 - the edge function used for barycentric tests.
 static float edgeFunction(const CanvasPoint &a, const CanvasPoint &b, float px, float py) {
 	return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
 }
 
-void renderWireframe(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
-	canvas.clearPixels();
-	for (const ModelTriangle &tri : model) {
-		CanvasPoint p[3];
-		if (!projectTriangle(tri, camera, p))
-			continue;
-		drawLine(p[0], p[1], tri.colour, canvas);
-		drawLine(p[1], p[2], tri.colour, canvas);
-		drawLine(p[2], p[0], tri.colour, canvas);
+// Clip a triangle against the near plane in camera space, then project the
+// result to canvas points. Returns 0, 1, or 2 sub-triangles (a triangle
+// straddling the plane becomes a quad, fan-split into two). This replaces the
+// old "drop the whole triangle if any vertex is behind the camera".
+static std::vector<std::array<CanvasPoint, 3>> clipAndProject(const ModelTriangle &tri, const Camera &camera) {
+	const float nearPlane = 0.1f;
+	glm::vec3 cam[3];
+	for (int i = 0; i < 3; i++)
+		cam[i] = camera.toCameraSpace(tri.vertices[i]);
+	auto inFront = [&](const glm::vec3 &v) { return -v.z > nearPlane; };
+
+	std::vector<glm::vec3> poly; // Sutherland-Hodgman against the near plane
+	for (int i = 0; i < 3; i++) {
+		const glm::vec3 &a = cam[i];
+		const glm::vec3 &b = cam[(i + 1) % 3];
+		bool ai = inFront(a), bi = inFront(b);
+		if (ai)
+			poly.push_back(a);
+		if (ai != bi) {
+			float t = (-nearPlane - a.z) / (b.z - a.z);
+			poly.push_back(a + t * (b - a));
+		}
+	}
+
+	std::vector<std::array<CanvasPoint, 3>> result;
+	if (poly.size() < 3)
+		return result;
+	std::vector<CanvasPoint> proj;
+	proj.reserve(poly.size());
+	for (const glm::vec3 &v : poly)
+		proj.push_back(camera.projectCameraPoint(v));
+	for (size_t i = 1; i + 1 < proj.size(); i++)
+		result.push_back({proj[0], proj[i], proj[i + 1]});
+	return result;
+}
+
+// Scanline fill of a projected triangle with an inverse-depth z-buffer.
+static void fillTriangle(const CanvasPoint p[3], uint32_t colour, std::vector<float> &depthBuffer, int W, int H,
+                         Canvas &canvas) {
+	float area = edgeFunction(p[0], p[1], p[2].x, p[2].y);
+	if (std::abs(area) < 1e-6f)
+		return;
+	int minX = std::max(0, static_cast<int>(std::floor(std::min({p[0].x, p[1].x, p[2].x}))));
+	int maxX = std::min(W - 1, static_cast<int>(std::ceil(std::max({p[0].x, p[1].x, p[2].x}))));
+	int minY = std::max(0, static_cast<int>(std::floor(std::min({p[0].y, p[1].y, p[2].y}))));
+	int maxY = std::min(H - 1, static_cast<int>(std::ceil(std::max({p[0].y, p[1].y, p[2].y}))));
+	float inv0 = 1.0f / p[0].depth;
+	float inv1 = 1.0f / p[1].depth;
+	float inv2 = 1.0f / p[2].depth;
+	for (int y = minY; y <= maxY; y++) {
+		for (int x = minX; x <= maxX; x++) {
+			float px = x + 0.5f;
+			float py = y + 0.5f;
+			float w0 = edgeFunction(p[1], p[2], px, py) / area;
+			float w1 = edgeFunction(p[2], p[0], px, py) / area;
+			float w2 = edgeFunction(p[0], p[1], px, py) / area;
+			if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+				continue;
+			float invDepth = w0 * inv0 + w1 * inv1 + w2 * inv2;
+			size_t idx = static_cast<size_t>(y) * W + x;
+			if (invDepth > depthBuffer[idx]) {
+				depthBuffer[idx] = invDepth;
+				canvas.setPixelColour(x, y, colour);
+			}
+		}
 	}
 }
 
-void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
+void renderWireframe(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
+	canvas.clearPixels();
+	for (const ModelTriangle &tri : model) {
+		for (const std::array<CanvasPoint, 3> &p : clipAndProject(tri, camera)) {
+			drawLine(p[0], p[1], tri.colour, canvas);
+			drawLine(p[1], p[2], tri.colour, canvas);
+			drawLine(p[2], p[0], tri.colour, canvas);
+		}
+	}
+}
+
+void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                      bool backfaceCull) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
-	// Inverse-depth buffer: 0 is infinitely far, larger is nearer.
-	std::vector<float> depthBuffer(static_cast<size_t>(W) * H, 0.0f);
+	std::vector<float> depthBuffer(static_cast<size_t>(W) * H, 0.0f); // inverse depth, 0 = far
 
 	for (const ModelTriangle &tri : model) {
-		CanvasPoint p[3];
-		if (!projectTriangle(tri, camera, p))
-			continue;
-		float area = edgeFunction(p[0], p[1], p[2].x, p[2].y);
-		if (std::abs(area) < 1e-6f)
-			continue;
-
-		int minX = std::max(0, static_cast<int>(std::floor(std::min({p[0].x, p[1].x, p[2].x}))));
-		int maxX = std::min(W - 1, static_cast<int>(std::ceil(std::max({p[0].x, p[1].x, p[2].x}))));
-		int minY = std::max(0, static_cast<int>(std::floor(std::min({p[0].y, p[1].y, p[2].y}))));
-		int maxY = std::min(H - 1, static_cast<int>(std::ceil(std::max({p[0].y, p[1].y, p[2].y}))));
-
-		float inv0 = 1.0f / p[0].depth;
-		float inv1 = 1.0f / p[1].depth;
-		float inv2 = 1.0f / p[2].depth;
-		uint32_t colour = tri.colour.toUint32();
-
-		for (int y = minY; y <= maxY; y++) {
-			for (int x = minX; x <= maxX; x++) {
-				float px = x + 0.5f;
-				float py = y + 0.5f;
-				// Barycentric weights (divide by signed area so winding does not matter).
-				float w0 = edgeFunction(p[1], p[2], px, py) / area;
-				float w1 = edgeFunction(p[2], p[0], px, py) / area;
-				float w2 = edgeFunction(p[0], p[1], px, py) / area;
-				if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
-					continue;
-				float invDepth = w0 * inv0 + w1 * inv1 + w2 * inv2;
-				size_t idx = static_cast<size_t>(y) * W + x;
-				if (invDepth > depthBuffer[idx]) {
-					depthBuffer[idx] = invDepth;
-					canvas.setPixelColour(x, y, colour);
-				}
-			}
+		for (const std::array<CanvasPoint, 3> &p : clipAndProject(tri, camera)) {
+			// Backface culling: a back-facing triangle projects with negative
+			// screen-space winding. Optional (needs consistent winding).
+			if (backfaceCull && edgeFunction(p[0], p[1], p[2].x, p[2].y) < 0.0f)
+				continue;
+			fillTriangle(p.data(), tri.colour.toUint32(), depthBuffer, W, H, canvas);
 		}
 	}
 }

@@ -25,6 +25,9 @@ public:
 	// Transform a world-space vertex into camera space (camera at origin looking -z).
 	glm::vec3 toCameraSpace(const glm::vec3 &vertex) const;
 
+	// Project a camera-space point onto the image plane (used after clipping).
+	CanvasPoint projectCameraPoint(const glm::vec3 &cameraSpacePoint) const;
+
 	// Project a world-space vertex onto the image plane. The returned CanvasPoint
 	// carries a positive `depth` (distance in front of the camera); depth <= 0
 	// means the vertex is level with or behind the camera.

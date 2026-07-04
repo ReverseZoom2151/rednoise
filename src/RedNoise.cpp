@@ -18,6 +18,7 @@ static ShadingModel shadingModel = ShadingModel::Phong;
 static Camera camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
 static Canvas canvas(WIDTH, HEIGHT);
 static bool orbiting = false;
+static bool backfaceCull = false;
 
 static const std::vector<ModelTriangle> &scene() {
 	static std::vector<ModelTriangle> triangles = loadOBJ("assets/cornell-box.obj", 0.35f);
@@ -38,7 +39,7 @@ void draw() {
 		renderWireframe(model, camera, canvas);
 		break;
 	case RenderMode::Rasterised:
-		renderRasterised(model, camera, canvas);
+		renderRasterised(model, camera, canvas, backfaceCull);
 		break;
 	case RenderMode::Raytraced:
 		renderRaytraced(model, camera, canvas, shadingModel);
@@ -88,6 +89,9 @@ void handleEvent(SDL_Event event) {
 			break;
 		case SDLK_O:
 			orbiting = !orbiting;
+			break;
+		case SDLK_C:
+			backfaceCull = !backfaceCull;
 			break;
 		case SDLK_R:
 			camera = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
