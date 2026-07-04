@@ -12,5 +12,7 @@
 // renders each camera ray by displaying the hit patch's converged radiosity.
 // A view-independent, noise-free (given enough samples) global-illumination
 // solution with the classic Cornell colour bleeding.
+// progressive = true uses the shooting solver (Cohen-Greenberg progressive
+// refinement) instead of Monte-Carlo Jacobi gathering.
 void renderRadiosity(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int subdivLevel = 3,
-                     int iterations = 8, int samples = 200);
+                     int iterations = 8, int samples = 200, bool progressive = false);

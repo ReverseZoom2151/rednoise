@@ -40,7 +40,7 @@ static glm::vec3 cosineHemisphere(const glm::vec3 &n, std::mt19937 &rng) {
 }
 
 void renderRadiosity(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int subdivLevel,
-                     int iterations, int samples) {
+                     int iterations, int samples, bool progressive) {
 	canvas.clearPixels();
 
 	// 1. Subdivide the scene into patches.
@@ -83,23 +83,68 @@ void renderRadiosity(const std::vector<ModelTriangle> &model, const Camera &came
 	Primitives noPrims; // must outlive `scene` (Scene keeps a reference)
 	Scene scene(patches, noPrims);
 
-	// 3. Jacobi gathering sweeps.
-	for (int iter = 0; iter < iterations; iter++) {
-		std::vector<glm::vec3> next = E;
-#pragma omp parallel for schedule(dynamic, 16)
-		for (int i = 0; i < emitStart; i++) {
-			std::mt19937 rng(static_cast<unsigned>(i) * 2654435761u + static_cast<unsigned>(iter) * 40503u + 1u);
-			glm::vec3 origin = centroid[i] + normal[i] * 1e-3f;
-			glm::vec3 incoming(0.0f);
-			for (int s = 0; s < samples; s++) {
-				glm::vec3 dir = cosineHemisphere(normal[i], rng);
-				RayTriangleIntersection h = scene.intersect(origin, dir, i);
-				if (h.hit && h.triangleIndex < static_cast<size_t>(N))
-					incoming += B[h.triangleIndex];
+	// 3a. Progressive (shooting) radiosity: repeatedly shoot the patch holding the
+	// most unshot energy to every other patch, weighted by a centroid-to-centroid
+	// form factor (cos*cos / pi*d^2, visibility-tested). Converges progressively,
+	// unlike solving the whole system - the classic Cohen-Greenberg method.
+	if (progressive) {
+		std::vector<glm::vec3> residual = E;
+		const float patchArea = 420.0f / static_cast<float>(N); // rough uniform patch area
+		int shoots = iterations * 60;
+		for (int s = 0; s < shoots; s++) {
+			int src = -1;
+			float best = 1e-4f;
+			for (int i = 0; i < N; i++) {
+				float p = residual[i].r + residual[i].g + residual[i].b;
+				if (p > best) {
+					best = p;
+					src = i;
+				}
 			}
-			next[i] = E[i] + albedo[i] * (incoming / static_cast<float>(samples));
+			if (src < 0)
+				break;
+			glm::vec3 dB = residual[src];
+			residual[src] = glm::vec3(0.0f);
+#pragma omp parallel for schedule(dynamic, 64)
+			for (int j = 0; j < N; j++) {
+				if (j == src || j >= emitStart)
+					continue;
+				glm::vec3 d = centroid[j] - centroid[src];
+				float dist = glm::length(d);
+				if (dist < 1e-4f)
+					continue;
+				d /= dist;
+				float cosS = glm::dot(normal[src], d), cosJ = glm::dot(normal[j], -d);
+				if (cosS <= 0.0f || cosJ <= 0.0f)
+					continue;
+				if (scene.occluded(centroid[src] + normal[src] * 1e-3f, d, dist - 2e-3f, src))
+					continue;
+				float form = cosS * cosJ / (3.14159265f * dist * dist) * patchArea;
+				glm::vec3 delta = albedo[j] * dB * form;
+				B[j] += delta;
+				residual[j] += delta;
+			}
 		}
-		B = next;
+	} else {
+
+		// 3b. Jacobi gathering sweeps.
+		for (int iter = 0; iter < iterations; iter++) {
+			std::vector<glm::vec3> next = E;
+#pragma omp parallel for schedule(dynamic, 16)
+			for (int i = 0; i < emitStart; i++) {
+				std::mt19937 rng(static_cast<unsigned>(i) * 2654435761u + static_cast<unsigned>(iter) * 40503u + 1u);
+				glm::vec3 origin = centroid[i] + normal[i] * 1e-3f;
+				glm::vec3 incoming(0.0f);
+				for (int s = 0; s < samples; s++) {
+					glm::vec3 dir = cosineHemisphere(normal[i], rng);
+					RayTriangleIntersection h = scene.intersect(origin, dir, i);
+					if (h.hit && h.triangleIndex < static_cast<size_t>(N))
+						incoming += B[h.triangleIndex];
+				}
+				next[i] = E[i] + albedo[i] * (incoming / static_cast<float>(samples));
+			}
+			B = next;
+		}
 	}
 
 	// 4. Render: each camera ray shows its hit patch's radiosity (Reinhard-mapped).
