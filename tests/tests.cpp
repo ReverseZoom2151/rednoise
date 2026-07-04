@@ -391,6 +391,13 @@ static void testDeepScanModules() {
 	CHECK(nearly(perspectiveInterp(0.5f, 0.5f, 0.0f, 1.0f, 1.0f / 3.0f, 0.0f, 0.0f, 1.0f, 0.0f), 0.25f));
 	CHECK(std::abs(perspectiveInterp(0.5f, 0.5f, 0.0f, 1.0f, 1.0f / 3.0f, 0.0f, 0.0f, 1.0f, 0.0f) - 0.5f) > 0.2f);
 
+	// Value noise: in [0,1], continuous, and distinct from gradient (Perlin) noise.
+	glm::vec3 vp(1.3f, 4.7f, 0.9f);
+	CHECK(valueNoise(vp) >= 0.0f && valueNoise(vp) <= 1.0f);
+	CHECK(std::abs(valueNoise(vp) - valueNoise(vp + glm::vec3(0.001f, 0, 0))) < 0.05f); // continuous
+	CHECK(std::abs(valueNoise(vp) - fractalNoise(vp, 1)) > 1e-3f);                      // not the same as gradient
+	CHECK(fractalValueNoise(vp, 5) >= 0.0f && fractalValueNoise(vp, 5) <= 1.0f);
+
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.
 	CHECK(nearly(applyExposure(glm::vec3(0.5f), 1.0f).r, 1.0f)); // +1 EV = x2

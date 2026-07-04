@@ -184,6 +184,65 @@ glm::vec4 fractalNoiseD(const glm::vec3 &p, int octaves) {
 	return glm::vec4(value, gradient.x, gradient.y, gradient.z);
 }
 
+// Hashes an integer lattice point to a pseudo-random value in [0, 1]. We reuse
+// the same permutation table P as the Perlin code, folding the three integer
+// coordinates through it the way Perlin folds corner indices. The final table
+// entry lies in [0, 255], which we normalise to [0, 1]. Because P is a fixed
+// permutation, this hash is deterministic and stable across calls.
+static float latticeValue(int X, int Y, int Z) {
+	int h = P[P[P[X & 255] + (Y & 255)] + (Z & 255)];
+	return static_cast<float>(h) / 255.0f;
+}
+
+float valueNoise(const glm::vec3 &p) {
+	// Integer lattice cell containing p, and the fractional position within it.
+	int X = static_cast<int>(std::floor(p.x));
+	int Y = static_cast<int>(std::floor(p.y));
+	int Z = static_cast<int>(std::floor(p.z));
+	float x = p.x - std::floor(p.x);
+	float y = p.y - std::floor(p.y);
+	float z = p.z - std::floor(p.z);
+
+	// Quintic-faded interpolation weights on each axis (same fade as Perlin).
+	float u = fade(x);
+	float v = fade(y);
+	float w = fade(z);
+
+	// Hashed random values at the 8 corners of the lattice cell.
+	float v000 = latticeValue(X, Y, Z);
+	float v100 = latticeValue(X + 1, Y, Z);
+	float v010 = latticeValue(X, Y + 1, Z);
+	float v110 = latticeValue(X + 1, Y + 1, Z);
+	float v001 = latticeValue(X, Y, Z + 1);
+	float v101 = latticeValue(X + 1, Y, Z + 1);
+	float v011 = latticeValue(X, Y + 1, Z + 1);
+	float v111 = latticeValue(X + 1, Y + 1, Z + 1);
+
+	// Trilinear interpolation of the corner values. Each input is already in
+	// [0, 1] and the weights are in [0, 1], so the result stays in [0, 1].
+	float x00 = lerp(u, v000, v100);
+	float x10 = lerp(u, v010, v110);
+	float x01 = lerp(u, v001, v101);
+	float x11 = lerp(u, v011, v111);
+	float y0 = lerp(v, x00, x10);
+	float y1 = lerp(v, x01, x11);
+	return lerp(w, y0, y1);
+}
+
+float fractalValueNoise(const glm::vec3 &p, int octaves) {
+	// fBm sum of value noise. valueNoise is already in [0, 1], so the amplitude
+	// weighted sum divided by the summed amplitudes stays in [0, 1] directly
+	// (no [-1,1] -> [0,1] remap is needed, unlike the gradient fractalNoise).
+	float sum = 0.0f, amplitude = 1.0f, frequency = 1.0f, norm = 0.0f;
+	for (int i = 0; i < octaves; i++) {
+		sum += amplitude * valueNoise(p * frequency);
+		norm += amplitude;
+		amplitude *= 0.5f;
+		frequency *= 2.0f;
+	}
+	return sum / norm;
+}
+
 float fractalNoise(const glm::vec3 &p, int octaves) {
 	float sum = 0.0f, amplitude = 1.0f, frequency = 1.0f, norm = 0.0f;
 	for (int i = 0; i < octaves; i++) {
