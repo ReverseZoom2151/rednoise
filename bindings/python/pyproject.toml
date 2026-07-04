@@ -61,10 +61,10 @@ build = "cp312-*"
 skip = "*musllinux*"
 
 [tool.cibuildwheel.linux]
+# Build x86_64 only: the 32-bit i686 build uses the legacy manylinux2014 image
+# (GCC 10, no C++23), and nobody needs 32-bit x86 for this renderer.
+archs = ["x86_64"]
 manylinux-x86_64-image = "quay.io/pypa/manylinux_2_34_x86_64"
-manylinux-aarch64-image = "quay.io/pypa/manylinux_2_34_aarch64"
-# Diagnostic: show which toolchains the image actually ships.
-before-all = "echo '=== /opt/rh ==='; ls /opt/rh/ 2>/dev/null; echo '=== toolset bins ==='; ls -d /opt/rh/gcc-toolset-*/root/usr/bin 2>/dev/null; echo '=== default ==='; which gcc g++; gcc --version | head -1"
-# Put any modern gcc-toolset (14/13/12) first on PATH so gcc/g++ resolve to a
-# C++23 compiler instead of the image's legacy devtoolset-10 (GCC 10).
-environment = { PATH = "/opt/rh/gcc-toolset-14/root/usr/bin:/opt/rh/gcc-toolset-13/root/usr/bin:/opt/rh/gcc-toolset-12/root/usr/bin:$PATH", CC = "gcc", CXX = "g++" }
+# manylinux_2_34 ships gcc-toolset-14 (GCC 14) but defaults to a legacy gcc; put
+# the toolset first on PATH so gcc/g++ are C++23-capable.
+environment = { PATH = "/opt/rh/gcc-toolset-14/root/usr/bin:$PATH", CC = "gcc", CXX = "g++" }
