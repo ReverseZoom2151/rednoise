@@ -3,9 +3,10 @@
 A CPU software renderer written in C++23. It draws into a plain pixel buffer (no
 GPU, no OpenGL) and, for the interactive app, presents it with SDL3; it uses glm
 for vector and matrix maths. It began as the University of Bristol computer
-graphics coursework ("RedNoise" is the first milestone) and grew into a full
-renderer: a rasteriser, a Whitted ray tracer, a Monte-Carlo path tracer, and a
-photon mapper, all rendering the Cornell box.
+graphics coursework ("RedNoise" is the first milestone) and grew into a renderer
+with seven ways to draw the Cornell box: a rasteriser, a Whitted ray tracer, a
+Monte-Carlo path tracer, a photon mapper, a classic radiosity solver, a
+bidirectional path tracer, and a Metropolis light transport sampler.
 
 Everything is verified end to end: the SDL-free engine is unit-tested and
 rendered headlessly in CI, which uploads the resulting images as build
@@ -15,43 +16,54 @@ artifacts.
 
 Rendering modes:
 
-- Wireframe, and a z-buffered rasteriser (near-plane clipping, optional backface
-  culling, and a shadow-mapping variant).
+- Wireframe, and a z-buffered rasteriser with full frustum clipping, optional
+  backface culling, and a shadow-mapping variant.
 - Whitted ray tracer: reflection, refraction, Fresnel, hard and soft shadows.
 - Monte-Carlo path tracer: global illumination (colour bleeding), soft shadows,
   and anti-aliasing together.
-- Photon mapper: indirect light and caustics.
+- Photon mapper: indirect light and caustics, with an optional final gather.
+
+Global illumination solvers:
+
+- Classic finite-element radiosity (patch subdivision, Monte-Carlo gathering).
+- Bidirectional path tracing (camera and light subpaths, connected).
+- Metropolis light transport (PSSMLT: a Markov chain over path space).
 
 Shading and lighting:
 
 - Flat, Gouraud, and Phong shading with per-vertex normals.
 - Proximity + angle-of-incidence diffuse, specular highlights, ambient floor.
-- Point, directional, and spot lights; area lights give soft shadows.
+- Point, directional, and spot lights; area lights give soft shadows; a
+  volumetric (3D sphere) emitter gives a wide penumbra.
 
 Materials:
 
 - Diffuse, mirror, glass (Snell + Fresnel), and metallic/roughness (PBR).
 - Textured (Wavefront `map_Kd`), procedural (Perlin) and bump/parallax mapping.
+- A library of named presets (gold, chrome, copper, emerald, jade, ruby, and
+  the classic plastics and rubbers).
 
 Geometry and scenes:
 
-- OBJ/MTL loading with per-vertex normals; analytic spheres alongside triangles.
+- OBJ/MTL loading with per-vertex normals; analytic spheres, planes, ellipsoids,
+  cylinders and cones alongside triangles.
 - Object transforms, instancing, and distance-based level of detail.
 - A fractal-terrain (Perlin heightfield) generator.
 
 Camera and image:
 
-- Perspective projection, lookAt, orbit, free-fly, and mouse-look.
+- Perspective projection, lookAt, orbit, free-fly, mouse-look, and roll.
 - Depth of field and motion blur (in the path tracer).
-- Tone-mapping and FXAA post-filters; supersampling anti-aliasing.
+- Tone-mapping, FXAA, and bloom post-filters; supersampling anti-aliasing.
 
 Performance and output:
 
 - A BVH acceleration structure and OpenMP multithreading.
 - PPM/BMP screenshots and numbered PPM frame sequences for video.
 
-See [ROADMAP.md](ROADMAP.md) for the phased build history and the few remaining
-items (all GPU/OpenCL, which need hardware this project does not target).
+See [ROADMAP.md](ROADMAP.md) for the phased build history. The only unbuilt
+items are GPU/OpenCL offload, a real-time GPU path tracer, and an ocean-water
+simulation, all of which need hardware or scale this project does not target.
 
 ## Dependencies
 
@@ -130,9 +142,10 @@ redNoise/
 ├── src/                    # the renderer engine + application
 │   ├── RedNoise.cpp        #   application: window loop, input, render-mode switch
 │   ├── Camera / Renderer   #   projection; wireframe/raster/ray/path/photon renderers
+│   ├── Radiosity / BDPT / Metropolis  #   the three GI solvers
 │   ├── Geometry / BVH / Scene    #   intersection, acceleration, analytic primitives
 │   ├── Light / Photon / Noise    #   lights, photon map, Perlin noise
-│   ├── ObjLoader / Transform     #   OBJ/MTL loading, instancing, LOD
+│   ├── Materials / ObjLoader / Transform  #   presets, OBJ/MTL loading, instancing, LOD
 │   └── Interpolation / Drawing   #   maths + line/triangle/texture drawing
 ├── framework/             # the "sdw" teaching framework (headers + sources together)
 │   ├── DrawingWindow.*     #   SDL3 window (the only SDL dependency)
