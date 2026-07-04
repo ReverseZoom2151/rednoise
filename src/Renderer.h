@@ -49,3 +49,4 @@ void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &c
 // Post-filters over a rendered canvas.
 void toneMap(Canvas &canvas, float exposure = 1.0f, float gamma = 2.2f);
 void applyFXAA(Canvas &canvas);
+void applyBloom(Canvas &canvas, float threshold = 0.75f, float intensity = 0.7f);

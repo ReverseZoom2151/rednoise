@@ -817,6 +817,56 @@ void toneMap(Canvas &canvas, float exposure, float gamma) {
 	}
 }
 
+// Bloom: extract pixels brighter than `threshold` (0..1 of full white), blur
+// that bright pass (repeated box blur ~ Gaussian), and add it back scaled by
+// `intensity` so highlights glow into their surroundings.
+void applyBloom(Canvas &canvas, float threshold, float intensity) {
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	size_t n = static_cast<size_t>(W) * H;
+	std::vector<glm::vec3> bright(n, glm::vec3(0.0f));
+	for (size_t i = 0; i < n; i++) {
+		uint32_t p = canvas.pixels[i];
+		glm::vec3 c((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+		float luma = (0.299f * c.r + 0.587f * c.g + 0.114f * c.b) / 255.0f;
+		if (luma > threshold)
+			bright[i] = c * (luma - threshold) / (1.0f - threshold);
+	}
+	// Separable box blur, repeated 3x to approximate a wide Gaussian.
+	const int radius = 6;
+	std::vector<glm::vec3> tmp(n);
+	auto blur = [&](std::vector<glm::vec3> &src, std::vector<glm::vec3> &dst, bool horizontal) {
+		for (int y = 0; y < H; y++) {
+			for (int x = 0; x < W; x++) {
+				glm::vec3 sum(0.0f);
+				int count = 0;
+				for (int k = -radius; k <= radius; k++) {
+					int sx = horizontal ? x + k : x;
+					int sy = horizontal ? y : y + k;
+					if (sx < 0 || sx >= W || sy < 0 || sy >= H)
+						continue;
+					sum += src[static_cast<size_t>(sy) * W + sx];
+					count++;
+				}
+				dst[static_cast<size_t>(y) * W + x] = sum / static_cast<float>(count);
+			}
+		}
+	};
+	for (int pass = 0; pass < 3; pass++) {
+		blur(bright, tmp, true);
+		blur(tmp, bright, false);
+	}
+	for (size_t i = 0; i < n; i++) {
+		uint32_t p = canvas.pixels[i];
+		glm::vec3 c((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+		c += bright[i] * intensity;
+		int r = std::min(255, static_cast<int>(c.r));
+		int g = std::min(255, static_cast<int>(c.g));
+		int b = std::min(255, static_cast<int>(c.b));
+		canvas.pixels[i] = (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+	}
+}
+
 // A lightweight FXAA: blur pixels along high-contrast luma edges to soften
 // jaggies without a full extra render pass.
 void applyFXAA(Canvas &canvas) {

@@ -136,6 +136,25 @@ fully-shaded ray tracer and beyond.
 
 ---
 
+## Phase 11 - Reference-parity extras
+
+Gaps found by a full re-scan of the four reference repositories in `extras/`
+that were not in the original plan.
+
+| Feature | Source | Status |
+| --- | --- | --- |
+| Analytic planes + quadrics (ellipsoid/cylinder/cone) | Raytracer_Bristol | [done] |
+| Bloom post-filter | COMS30115 gallery | [done] |
+| Full frustum clipping (all planes) | COMS30115 clipping lecture | pending |
+| Volumetric 3D light source | COMS30115 gallery | pending |
+| Photon-map final gather | COMS30115 gallery | pending |
+| Named PBR material presets + camera roll | Raytracer_Bristol / COMS30020 | pending |
+| Classic radiosity (form factors) | COMS30115 lecture 14 | pending |
+| Bidirectional path tracing | COMS30115 lecture 15 | pending |
+| Metropolis light transport (PSSMLT) | COMS30115 lecture 15 | pending |
+
+---
+
 ## Suggested near-term path
 
 1. Perspective projection + wireframe (Phase 1) - the box finally appears.
