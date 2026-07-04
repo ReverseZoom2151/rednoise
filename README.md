@@ -85,9 +85,9 @@ works whether or not you have the libraries installed.
 
 Knobs, if you want to override the default:
 
-- `-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER` — force-fetch the newest of
+- `-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER` force-fetches the newest of
   everything, ignoring any system copies.
-- `-DFETCH_DEPENDENCIES=OFF` — never fetch; use only system packages and the
+- `-DFETCH_DEPENDENCIES=OFF` never fetches; it uses only system packages and the
   vendored glm (fully offline).
 
 A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+), plus CMake
