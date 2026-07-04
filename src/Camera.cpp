@@ -65,3 +65,15 @@ void Camera::orbitY(float radians, const glm::vec3 &target) {
 	position = target + rot * (position - target);
 	lookAt(target);
 }
+
+void Camera::primaryRay(float sx, float sy, float f, glm::vec3 &origin, glm::vec3 &direction) const {
+	if (orthographic) {
+		// Parallel rays: all point down the camera's forward axis; the origin
+		// slides across the image plane instead of the direction fanning out.
+		origin = position + orientation * glm::vec3(sx / f * orthoScale, sy / f * orthoScale, 0.0f);
+		direction = glm::normalize(orientation * glm::vec3(0.0f, 0.0f, -1.0f));
+	} else {
+		origin = position;
+		direction = glm::normalize(orientation * glm::vec3(sx / f, sy / f, -1.0f));
+	}
+}

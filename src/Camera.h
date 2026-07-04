@@ -19,8 +19,18 @@ public:
 	int imageWidth = 320;
 	int imageHeight = 240;
 
+	// Orthographic projection: parallel primary rays instead of a pinhole. Off by
+	// default; orthoScale sets the world-space half-extent mapped across the image.
+	bool orthographic = false;
+	float orthoScale = 1.0f;
+
 	Camera() = default;
 	Camera(int width, int height, float focal, const glm::vec3 &pos);
+
+	// Build a primary ray for image-plane offset (sx, sy) (sx = x - W/2,
+	// sy = -(y - H/2)) at focal-plane scale f. Perspective by default; parallel
+	// rays from a shifted origin when orthographic.
+	void primaryRay(float sx, float sy, float f, glm::vec3 &origin, glm::vec3 &direction) const;
 
 	// Transform a world-space vertex into camera space (camera at origin looking -z).
 	glm::vec3 toCameraSpace(const glm::vec3 &vertex) const;

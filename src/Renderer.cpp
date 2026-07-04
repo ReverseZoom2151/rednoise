@@ -872,14 +872,14 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 #pragma omp parallel for schedule(dynamic, 4)
 	for (int y = 0; y < H; y++) {
 		for (int x = 0; x < W; x++) {
-			// Ray through this pixel: invert the projection to get a camera-space
-			// direction, then rotate into world space.
-			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
-			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-			glm::vec3 colour = traceRay(camera.position, direction, scene, used, shading, maxDepth);
+			// Primary ray through this pixel (perspective, or parallel if the
+			// camera is orthographic).
+			glm::vec3 rayO, direction;
+			camera.primaryRay(x - W / 2.0f, -(y - H / 2.0f), f, rayO, direction);
+			glm::vec3 colour = traceRay(rayO, direction, scene, used, shading, maxDepth);
 			// Depth fog: blend toward the fog colour by 1 - exp(-density * distance).
 			if (fogDensity > 0.0f) {
-				RayTriangleIntersection h = scene.intersect(camera.position, direction);
+				RayTriangleIntersection h = scene.intersect(rayO, direction);
 				float dist = h.hit ? h.distanceFromCamera : 30.0f;
 				colour = glm::mix(colour, fogColour, 1.0f - std::exp(-fogDensity * dist));
 			}
@@ -966,13 +966,14 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 			for (int s = 0; s < samples; s++) {
 				// Jitter within the pixel: supersampling anti-aliasing for free.
 				float jx = jitter(rng), jy = jitter(rng);
-				glm::vec3 dirCamera((x + 0.5f + jx - W / 2.0f) / f, -(y + 0.5f + jy - H / 2.0f) / f, -1.0f);
-				glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
+				// Primary ray (perspective, or parallel if the camera is orthographic).
+				glm::vec3 rayO, direction;
+				camera.primaryRay(x + 0.5f + jx - W / 2.0f, -(y + 0.5f + jy - H / 2.0f), f, rayO, direction);
 				// Motion blur: jitter the camera along its motion vector over the shutter.
-				glm::vec3 camPos = camera.position + cameraMotion * U(rng);
+				glm::vec3 camPos = rayO + cameraMotion * U(rng);
 				glm::vec3 origin = camPos;
 				// Depth of field: sample a lens disk and re-aim at the focal point.
-				if (aperture > 0.0f) {
+				if (aperture > 0.0f && !camera.orthographic) {
 					glm::vec3 focalPoint = camPos + direction * focusDistance;
 					float ang = 2.0f * 3.14159265f * U(rng);
 					float rad = aperture * std::sqrt(U(rng));
