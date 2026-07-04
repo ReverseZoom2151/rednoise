@@ -67,8 +67,9 @@ else ()
     target_include_directories(glm_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
     message(STATUS "glm: using vendored third_party/glm (FETCH_DEPENDENCIES=OFF)")
 endif ()
-# Every target below picks up glm through this interface target.
-link_libraries(glm_headers)
+# Each of our targets links glm_headers explicitly below. (Deliberately not
+# link_libraries() at directory scope: that would leak onto fetched dependency
+# targets like the OpenCL ICD loader and break their install/export sets.)
 
 # The SDL-free "engine": geometry, camera, drawing and rendering into a Canvas.
 # Shared by the app, the headless renderer and the tests.
@@ -100,10 +101,24 @@ set(ENGINE_SOURCES
 
 # --- Application (needs SDL3) ------------------------------------------------
 if (BUILD_APP)
-    find_package(SDL3 REQUIRED CONFIG)
+    if (FETCH_DEPENDENCIES)
+        include(FetchContent)
+        set(SDL_TEST OFF CACHE BOOL "" FORCE)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(SDL3
+                GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+                GIT_TAG main # latest upstream SDL3
+                GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(SDL3)
+        message(STATUS "SDL3: fetching latest from upstream (built from source)")
+    else ()
+        find_package(SDL3 REQUIRED CONFIG)
+    endif ()
     add_executable(RedNoise src/RedNoise.cpp framework/DrawingWindow.cpp ${ENGINE_SOURCES})
     target_include_directories(RedNoise PRIVATE framework src)
-    target_link_libraries(RedNoise PRIVATE SDL3::SDL3)
+    target_link_libraries(RedNoise PRIVATE SDL3::SDL3 glm_headers)
     link_openmp(RedNoise)
     if (NOT MSVC)
         target_compile_options(RedNoise PRIVATE
@@ -117,20 +132,24 @@ endif ()
 if (BUILD_HEADLESS)
     add_executable(render_headless tools/render_headless.cpp ${ENGINE_SOURCES})
     target_include_directories(render_headless PRIVATE framework src)
+    target_link_libraries(render_headless PRIVATE glm_headers)
     link_openmp(render_headless)
 
     # Fractal-terrain generator (only needs the noise module).
     add_executable(gen_terrain tools/gen_terrain.cpp src/Noise.cpp)
     target_include_directories(gen_terrain PRIVATE src)
+    target_link_libraries(gen_terrain PRIVATE glm_headers)
 
     # Orbiting-camera animation to a PPM frame sequence.
     add_executable(animate tools/animate.cpp ${ENGINE_SOURCES})
     target_include_directories(animate PRIVATE framework src)
+    target_link_libraries(animate PRIVATE glm_headers)
     link_openmp(animate)
 
     # Animated Gerstner-wave ocean to a PPM frame sequence.
     add_executable(render_ocean tools/render_ocean.cpp ${ENGINE_SOURCES})
     target_include_directories(render_ocean PRIVATE framework src)
+    target_link_libraries(render_ocean PRIVATE glm_headers)
     link_openmp(render_ocean)
 endif ()
 
@@ -144,16 +163,42 @@ endif ()
 # find_package always picks up the newest headers/loader installed.
 set(OPENCL_TARGET_VERSION 120 CACHE STRING "OpenCL API level to target (120 = broadest, 300 = require 3.0)")
 if (BUILD_GPU)
-    find_package(OpenCL)
-    if (OpenCL_FOUND)
-        message(STATUS "OpenCL SDK ${OpenCL_VERSION_STRING} found; compiling to target API ${OPENCL_TARGET_VERSION}")
+    set(_ocl_ok FALSE)
+    if (FETCH_DEPENDENCIES)
+        # Fetch and build the latest Khronos OpenCL SDK (headers + ICD loader).
+        # The loader still dispatches at runtime to the installed vendor driver -
+        # that runtime is the one piece that cannot be fetched (it ships with the
+        # GPU driver).
+        include(FetchContent)
+        FetchContent_Declare(OpenCLHeaders
+                GIT_REPOSITORY https://github.com/KhronosGroup/OpenCL-Headers.git
+                GIT_TAG main GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(OpenCLHeaders)
+        set(OPENCL_ICD_LOADER_HEADERS_DIR ${openclheaders_SOURCE_DIR} CACHE PATH "" FORCE)
+        FetchContent_Declare(OpenCLICDLoader
+                GIT_REPOSITORY https://github.com/KhronosGroup/OpenCL-ICD-Loader.git
+                GIT_TAG main GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(OpenCLICDLoader)
+        set(_ocl_libs OpenCL OpenCL::Headers)
+        set(_ocl_ok TRUE)
+        message(STATUS "OpenCL: fetching latest Khronos headers + ICD loader from upstream")
+    else ()
+        find_package(OpenCL)
+        if (OpenCL_FOUND)
+            message(STATUS "OpenCL SDK ${OpenCL_VERSION_STRING} found")
+            set(_ocl_libs OpenCL::OpenCL)
+            set(_ocl_ok TRUE)
+        endif ()
+    endif ()
+    if (_ocl_ok)
+        message(STATUS "gpu_pathtracer: compiling to target OpenCL API ${OPENCL_TARGET_VERSION}")
         add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp ${ENGINE_SOURCES})
         target_include_directories(gpu_pathtracer PRIVATE framework src)
         target_compile_definitions(gpu_pathtracer PRIVATE CL_TARGET_OPENCL_VERSION=${OPENCL_TARGET_VERSION})
-        target_link_libraries(gpu_pathtracer PRIVATE OpenCL::OpenCL)
+        target_link_libraries(gpu_pathtracer PRIVATE ${_ocl_libs} glm_headers)
     else ()
         message(WARNING "BUILD_GPU=ON but no OpenCL SDK found; skipping gpu_pathtracer. "
-                "Install any vendor's OpenCL SDK (or the Khronos headers + ICD loader).")
+                "Enable FETCH_DEPENDENCIES, or install any vendor's OpenCL SDK.")
     endif ()
 endif ()
 
@@ -162,6 +207,7 @@ if (BUILD_TESTS)
     enable_testing()
     add_executable(rednoise_tests tests/tests.cpp ${ENGINE_SOURCES})
     target_include_directories(rednoise_tests PRIVATE framework src)
+    target_link_libraries(rednoise_tests PRIVATE glm_headers)
     link_openmp(rednoise_tests)
     add_test(NAME unit COMMAND rednoise_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif ()

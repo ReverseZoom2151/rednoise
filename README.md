@@ -69,20 +69,24 @@ including the GPU path tracer and the ocean-water simulation, is built.
 
 ## Dependencies
 
-No dependency version is pinned; the build takes the newest of each. `glm` is
-fetched from upstream at configure time, and `SDL3` / `OpenCL` / `OpenMP` resolve
-to whatever `find_package` locates on the system.
+No dependency version is pinned. With `FETCH_DEPENDENCIES=ON` (the default) every
+dependency that *can* be built from source is fetched from upstream at configure
+time, so the newest of each flows in automatically.
 
-| Dependency | Version | How it's provided |
-|------------|---------|-------------------|
-| [glm](https://github.com/g-truc/glm) | latest | Fetched from upstream at configure time (CMake FetchContent). A vendored copy in `third_party/glm` is the offline fallback (`-DFETCH_DEPENDENCIES=OFF`) |
-| [SDL3](https://www.libsdl.org) | latest 3.x | `find_package(SDL3)` (vcpkg / package manager); only the interactive app needs it |
-| [OpenCL](https://www.khronos.org/opencl) | latest | `find_package(OpenCL)` (any vendor's SDK); only the GPU path tracer needs it |
-| [OpenMP](https://www.openmp.org) | optional | Multithreads the tracers; a missing OpenMP just runs single-threaded |
+| Dependency | Default source | Notes |
+|------------|----------------|-------|
+| [glm](https://github.com/g-truc/glm) | Fetched (FetchContent) | Header-only; vendored copy in `third_party/glm` is the offline fallback |
+| [SDL3](https://www.libsdl.org) | Fetched + built from source | Only the interactive app; source build is slower than a system package |
+| [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-ICD-Loader) | Fetched + built (Khronos headers + ICD loader) | Only the GPU path tracer |
+| OpenCL runtime | GPU driver | Cannot be fetched: it is the vendor's driver implementation; keep the driver current |
+| [OpenMP](https://www.openmp.org) | Compiler | Cannot be fetched: it is a compiler feature (libgomp/libomp/vcomp); optional |
 
-A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+). Fetching glm
-needs network at configure time; use `-DFETCH_DEPENDENCIES=OFF` to build offline
-from the vendored copy.
+Set `-DFETCH_DEPENDENCIES=OFF` to instead use system packages: `find_package`
+for SDL3 / OpenCL (vcpkg or a vendor SDK) and the vendored glm. That path is
+faster and works offline. Either way nothing is version-locked.
+
+A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+). Fetching needs
+network at configure time.
 
 ## Building
 
