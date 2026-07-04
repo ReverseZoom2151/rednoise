@@ -339,6 +339,15 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
 	}
 
+	if (depth > 0 && tri.material == Material::Metal) {
+		// Metal reflects, tinted by its albedo (roughness ignored in the Whitted
+		// path, which is deterministic; the path tracer blurs by roughness).
+		glm::vec3 n = faceViewer(tri.normal, direction);
+		glm::vec3 reflected = glm::reflect(direction, n);
+		glm::vec3 refl = traceRay(point + 1e-4f * reflected, reflected, scene, lights, shading, depth - 1);
+		return glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue) / 255.0f * refl;
+	}
+
 	return shadeDiffuse(hit, direction, lights, scene, shading);
 }
 
@@ -419,6 +428,19 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 		std::uniform_real_distribution<float> U(0.0f, 1.0f);
 		glm::vec3 dir = (glm::length(refracted) < 1e-6f || U(rng) < fresnel) ? glm::reflect(direction, n) : refracted;
 		return pathTrace(point + 1e-4f * dir, dir, scene, lights, depth - 1, rng);
+	}
+	if (tri.material == Material::Metal && depth > 0) {
+		// Metallic/roughness: reflect the environment, tinted by the albedo and
+		// blurred by roughness (mix the mirror direction toward a diffuse sample).
+		glm::vec3 n = faceViewer(tri.normal, direction);
+		glm::vec3 reflected = glm::reflect(direction, n);
+		glm::vec3 diffuseDir = cosineHemisphere(n, rng);
+		float r2 = tri.roughness * tri.roughness;
+		glm::vec3 dir = glm::normalize(glm::mix(reflected, diffuseDir, r2));
+		if (glm::dot(dir, n) <= 0.0f)
+			dir = reflected;
+		glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+		return albedo * pathTrace(point + 1e-4f * dir, dir, scene, lights, depth - 1, rng);
 	}
 
 	glm::vec3 n = faceViewer(tri.normal, direction);

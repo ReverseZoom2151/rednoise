@@ -9,7 +9,7 @@
 #include "TexturePoint.h"
 
 // Surface response used by the ray tracer.
-enum class Material { Diffuse, Mirror, Glass, Procedural, Bump, Parallax };
+enum class Material { Diffuse, Mirror, Glass, Procedural, Bump, Parallax, Metal };
 
 struct ModelTriangle {
 	std::array<glm::vec3, 3> vertices{};
@@ -18,6 +18,7 @@ struct ModelTriangle {
 	Colour colour{};
 	glm::vec3 normal{};
 	Material material = Material::Diffuse;
+	float roughness = 0.2f;              // for Material::Metal (0 = mirror, 1 = diffuse)
 	std::shared_ptr<TextureMap> texture; // null unless the material had a map_Kd
 
 	ModelTriangle();

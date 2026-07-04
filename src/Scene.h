@@ -12,6 +12,7 @@ struct Sphere {
 	float radius = 1.0f;
 	Colour colour{};
 	Material material = Material::Diffuse;
+	float roughness = 0.2f; // for Material::Metal
 };
 
 // A scene of triangle meshes (accelerated by a BVH) plus analytic spheres. Ray

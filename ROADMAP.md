@@ -132,7 +132,7 @@ fully-shaded ray tracer and beyond.
 
 - Real-time GPU path tracer with reflection + refraction.
 - Physically-based ocean-water surface with photon-mapped caustics.
-- Full physically-based rendering (PBR) material model (metallic/roughness).
+- [done] Physically-based rendering (PBR) material model (metallic/roughness).
 
 ---
 

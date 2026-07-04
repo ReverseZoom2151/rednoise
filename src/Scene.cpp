@@ -32,6 +32,7 @@ RayTriangleIntersection Scene::intersect(const glm::vec3 &origin, const glm::vec
 			ModelTriangle tri;
 			tri.colour = s.colour;
 			tri.material = s.material;
+			tri.roughness = s.roughness;
 			tri.normal = normal;
 			tri.vertexNormals = {normal, normal, normal};
 			closest.hit = true;

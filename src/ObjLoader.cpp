@@ -59,6 +59,8 @@ static Material materialFor(const std::string &name) {
 		return Material::Bump;
 	if (name == "Parallax")
 		return Material::Parallax;
+	if (name == "Metal")
+		return Material::Metal;
 	return Material::Diffuse;
 }
 
