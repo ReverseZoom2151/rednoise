@@ -424,6 +424,33 @@ static glm::vec2 parallaxUV(const ModelTriangle &tri, glm::vec2 uv, const glm::v
 	return uv - offset;
 }
 
+// Tangent-space normal mapping: build the triangle's tangent frame from its
+// positions + UVs, read a normal from the texture's height gradient, and rotate
+// it into world space. Perturbs the shading normal per texel from a texture.
+static glm::vec3 tangentNormal(const ModelTriangle &tri, float u, float v, const glm::vec3 &geomN) {
+	if (!tri.texture)
+		return geomN;
+	glm::vec3 e1 = tri.vertices[1] - tri.vertices[0];
+	glm::vec3 e2 = tri.vertices[2] - tri.vertices[0];
+	glm::vec2 d1(tri.texturePoints[1].x - tri.texturePoints[0].x, tri.texturePoints[1].y - tri.texturePoints[0].y);
+	glm::vec2 d2(tri.texturePoints[2].x - tri.texturePoints[0].x, tri.texturePoints[2].y - tri.texturePoints[0].y);
+	float det = d1.x * d2.y - d2.x * d1.y;
+	if (std::abs(det) < 1e-8f)
+		return geomN;
+	float f = 1.0f / det;
+	glm::vec3 T = glm::normalize(f * (d2.y * e1 - d1.y * e2));
+	glm::vec3 B = glm::normalize(f * (-d2.x * e1 + d1.x * e2));
+	float e = 1.0f / static_cast<float>(tri.texture->width);
+	auto lum = [&](float uu, float vv) {
+		glm::vec3 c = sampleTexture(*tri.texture, uu, vv);
+		return (c.r + c.g + c.b) / 765.0f;
+	};
+	float hu = lum(u + e, v) - lum(u - e, v);
+	float hv = lum(u, v + e) - lum(u, v - e);
+	glm::vec3 tn = glm::normalize(glm::vec3(-hu * 4.0f, -hv * 4.0f, 1.0f));
+	return glm::normalize(tn.x * T + tn.y * B + tn.z * geomN);
+}
+
 // The surface's own colour (0..255) at a hit: sampled texture, procedural, or flat.
 static glm::vec3 surfaceBaseColour(const RayTriangleIntersection &hit, const glm::vec3 &viewDir) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -477,6 +504,11 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 	normal = faceViewer(normal, rayDirection);
 	if (tri.material == Material::Bump)
 		normal = bumpNormal(normal, point);
+	if (tri.material == Material::NormalMap && tri.texture) {
+		float tu = w0 * tri.texturePoints[0].x + w1 * tri.texturePoints[1].x + w2 * tri.texturePoints[2].x;
+		float tv = w0 * tri.texturePoints[0].y + w1 * tri.texturePoints[1].y + w2 * tri.texturePoints[2].y;
+		normal = tangentNormal(tri, tu, tv, normal);
+	}
 	return shadeSurface(point, normal, viewDir, lights, scene, ignore, base);
 }
 

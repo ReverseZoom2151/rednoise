@@ -11,6 +11,7 @@
 #include "Lines.h"
 #include "Materials.h"
 #include "Meshing.h"
+#include "Mipmap.h"
 #include "Nurbs.h"
 #include "ObjLoader.h"
 #include "Octree.h"
@@ -257,6 +258,21 @@ static void testDeepScanModules() {
 	glm::vec3 rgb(0.3f, 0.7f, 0.2f);
 	glm::vec3 back = hsvToRgb(rgbToHsv(rgb));
 	CHECK(std::abs(back.r - rgb.r) < 0.01f && std::abs(back.g - rgb.g) < 0.01f && std::abs(back.b - rgb.b) < 0.01f);
+
+	// Mipmap pyramid: a checkerboard averages toward grey at coarse levels.
+	TextureMap checker;
+	checker.width = 8;
+	checker.height = 8;
+	checker.pixels.resize(64);
+	for (int yy = 0; yy < 8; yy++)
+		for (int xx = 0; xx < 8; xx++)
+			checker.pixels[yy * 8 + xx] = ((xx + yy) & 1) ? 0xFFFFFFFFu : 0xFF000000u;
+	MipTexture mip(checker);
+	CHECK(mip.levelCount() == 4); // 8 -> 4 -> 2 -> 1
+	glm::vec3 coarse = mip.sampleBilinear(mip.levelCount() - 1, 0.5f, 0.5f);
+	CHECK(coarse.r > 100.0f && coarse.r < 160.0f); // 1x1 level ~ grey (checkerboard mean)
+	glm::vec3 fine = mip.sampleTrilinear(0.5f, 0.5f, 0.0f);
+	CHECK(fine.r >= 0.0f && fine.r <= 255.0f);
 
 	// Line drawing sets pixels; Cohen-Sutherland clips a crossing line.
 	Canvas canvas(32, 32);

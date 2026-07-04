@@ -118,6 +118,7 @@ set(ENGINE_SOURCES
         src/OceanFFT.cpp
         src/ColourUtil.cpp
         src/Lines.cpp
+        src/Mipmap.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
