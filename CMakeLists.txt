@@ -42,6 +42,34 @@ else ()
             -Wno-unused-parameter -Wno-unused-variable -Wno-ignored-attributes)
 endif ()
 
+# --- glm (header-only vector maths) -----------------------------------------
+# No pinned version: by default we fetch the latest glm from upstream at
+# configure time, so updates flow in automatically. Set FETCH_DEPENDENCIES=OFF
+# to use the vendored offline copy in third_party/glm instead (e.g. no network).
+option(FETCH_DEPENDENCIES "Fetch the latest glm from upstream (else use vendored third_party/glm)" ON)
+add_library(glm_headers INTERFACE)
+if (FETCH_DEPENDENCIES)
+    include(FetchContent)
+    set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(glm
+            GIT_REPOSITORY https://github.com/g-truc/glm.git
+            GIT_TAG master # always the latest upstream
+            GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(glm)
+    if (TARGET glm::glm)
+        target_link_libraries(glm_headers INTERFACE glm::glm)
+    elseif (TARGET glm)
+        target_link_libraries(glm_headers INTERFACE glm)
+    endif ()
+    message(STATUS "glm: fetching latest from upstream (FETCH_DEPENDENCIES=ON)")
+else ()
+    target_include_directories(glm_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+    message(STATUS "glm: using vendored third_party/glm (FETCH_DEPENDENCIES=OFF)")
+endif ()
+# Every target below picks up glm through this interface target.
+link_libraries(glm_headers)
+
 # The SDL-free "engine": geometry, camera, drawing and rendering into a Canvas.
 # Shared by the app, the headless renderer and the tests.
 set(ENGINE_SOURCES
@@ -74,7 +102,7 @@ set(ENGINE_SOURCES
 if (BUILD_APP)
     find_package(SDL3 REQUIRED CONFIG)
     add_executable(RedNoise src/RedNoise.cpp framework/DrawingWindow.cpp ${ENGINE_SOURCES})
-    target_include_directories(RedNoise PRIVATE framework third_party src)
+    target_include_directories(RedNoise PRIVATE framework src)
     target_link_libraries(RedNoise PRIVATE SDL3::SDL3)
     link_openmp(RedNoise)
     if (NOT MSVC)
@@ -88,21 +116,21 @@ endif ()
 # --- Headless PPM renderer (no SDL3) ----------------------------------------
 if (BUILD_HEADLESS)
     add_executable(render_headless tools/render_headless.cpp ${ENGINE_SOURCES})
-    target_include_directories(render_headless PRIVATE framework third_party src)
+    target_include_directories(render_headless PRIVATE framework src)
     link_openmp(render_headless)
 
     # Fractal-terrain generator (only needs the noise module).
     add_executable(gen_terrain tools/gen_terrain.cpp src/Noise.cpp)
-    target_include_directories(gen_terrain PRIVATE src third_party)
+    target_include_directories(gen_terrain PRIVATE src)
 
     # Orbiting-camera animation to a PPM frame sequence.
     add_executable(animate tools/animate.cpp ${ENGINE_SOURCES})
-    target_include_directories(animate PRIVATE framework third_party src)
+    target_include_directories(animate PRIVATE framework src)
     link_openmp(animate)
 
     # Animated Gerstner-wave ocean to a PPM frame sequence.
     add_executable(render_ocean tools/render_ocean.cpp ${ENGINE_SOURCES})
-    target_include_directories(render_ocean PRIVATE framework third_party src)
+    target_include_directories(render_ocean PRIVATE framework src)
     link_openmp(render_ocean)
 endif ()
 
@@ -120,7 +148,7 @@ if (BUILD_GPU)
     if (OpenCL_FOUND)
         message(STATUS "OpenCL SDK ${OpenCL_VERSION_STRING} found; compiling to target API ${OPENCL_TARGET_VERSION}")
         add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp ${ENGINE_SOURCES})
-        target_include_directories(gpu_pathtracer PRIVATE framework third_party src)
+        target_include_directories(gpu_pathtracer PRIVATE framework src)
         target_compile_definitions(gpu_pathtracer PRIVATE CL_TARGET_OPENCL_VERSION=${OPENCL_TARGET_VERSION})
         target_link_libraries(gpu_pathtracer PRIVATE OpenCL::OpenCL)
     else ()
@@ -133,7 +161,7 @@ endif ()
 if (BUILD_TESTS)
     enable_testing()
     add_executable(rednoise_tests tests/tests.cpp ${ENGINE_SOURCES})
-    target_include_directories(rednoise_tests PRIVATE framework third_party src)
+    target_include_directories(rednoise_tests PRIVATE framework src)
     link_openmp(rednoise_tests)
     add_test(NAME unit COMMAND rednoise_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif ()

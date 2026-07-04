@@ -69,13 +69,20 @@ including the GPU path tracer and the ocean-water simulation, is built.
 
 ## Dependencies
 
+No dependency version is pinned; the build takes the newest of each. `glm` is
+fetched from upstream at configure time, and `SDL3` / `OpenCL` / `OpenMP` resolve
+to whatever `find_package` locates on the system.
+
 | Dependency | Version | How it's provided |
 |------------|---------|-------------------|
-| [SDL3](https://www.libsdl.org) | 3.x | System library (vcpkg / package manager); only the interactive app needs it |
-| [glm](https://github.com/g-truc/glm) | 1.0.1 | Vendored in `third_party/glm` (nothing to install) |
+| [glm](https://github.com/g-truc/glm) | latest | Fetched from upstream at configure time (CMake FetchContent). A vendored copy in `third_party/glm` is the offline fallback (`-DFETCH_DEPENDENCIES=OFF`) |
+| [SDL3](https://www.libsdl.org) | latest 3.x | `find_package(SDL3)` (vcpkg / package manager); only the interactive app needs it |
+| [OpenCL](https://www.khronos.org/opencl) | latest | `find_package(OpenCL)` (any vendor's SDK); only the GPU path tracer needs it |
 | [OpenMP](https://www.openmp.org) | optional | Multithreads the tracers; a missing OpenMP just runs single-threaded |
 
-A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+).
+A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+). Fetching glm
+needs network at configure time; use `-DFETCH_DEPENDENCIES=OFF` to build offline
+from the vendored copy.
 
 ## Building
 
@@ -179,7 +186,7 @@ redNoise/
 │   ├── Canvas.*            #   SDL-free pixel buffer + PPM save
 │   └── CanvasPoint.* CanvasTriangle.* Colour.* ModelTriangle.*
 │       RayTriangleIntersection.* TextureMap.* TexturePoint.* Utils.*
-├── third_party/glm/       # vendored glm 1.0.1 (header-only, trimmed)
+├── third_party/glm/       # vendored glm (offline fallback; latest is fetched by default)
 ├── tools/                 # render_headless, gen_terrain, animate
 ├── tests/                 # CTest unit tests (SDL-free)
 ├── assets/                # cornell-box.obj/.mtl, sphere.obj, terrain.obj, texture.ppm

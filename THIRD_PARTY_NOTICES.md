@@ -3,18 +3,20 @@
 This project bundles third-party components. They are vendored under
 `third_party/` and retain their original licenses.
 
-## OpenGL Mathematics (GLM) 1.0.1
+## OpenGL Mathematics (GLM)
 
-- Location: `third_party/glm/`
 - Homepage: https://github.com/g-truc/glm
 - License: The Happy Bunny License (Modified MIT) / MIT License — see
   `third_party/glm/copying.txt`
 - Copyright (c) 2005 – G-Truc Creation
 
-GLM is a header-only mathematics library for graphics software. Only the
-`glm/` header tree and its license are vendored here; the upstream
-`cmake/`, `doc/`, `test/`, `util/` directories and the C++20 module
-(`glm.cppm`) are intentionally omitted.
+GLM is a header-only mathematics library for graphics software. By default the
+build fetches the latest GLM from upstream (CMake FetchContent), so no version
+is pinned. A trimmed offline copy (the `glm/` header tree + its license) is
+vendored under `third_party/glm/` as a fallback, used when
+`-DFETCH_DEPENDENCIES=OFF` or for non-CMake builds; the upstream `cmake/`,
+`doc/`, `test/`, `util/` directories and the C++20 module (`glm.cppm`) are
+intentionally omitted from the vendored copy.
 
 ## "sdw" teaching framework
 
