@@ -120,7 +120,7 @@ fully-shaded ray tracer and beyond.
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| More primitives | Spheres, planes, quadrics (ellipsoid/cone/cylinder) alongside triangles. | ●● | RT |
+| [done] More primitives (analytic spheres) | Spheres, planes, quadrics (ellipsoid/cone/cylinder) alongside triangles. | ●● | RT |
 | [done] Extra meshes | Load spheres, bunny, logo, higher-poly Cornell scenes. | ● | 20 |
 | [done] Object transforms / instancing | Translate/scale/rotate matrices per object. | ●● | RT |
 | [done] Animation system | Scripted camera/light choreography over frames. | ●● | 20 |

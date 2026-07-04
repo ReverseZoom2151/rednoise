@@ -53,6 +53,7 @@ set(ENGINE_SOURCES
         src/Noise.cpp
         src/BVH.cpp
         src/Transform.cpp
+        src/Scene.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

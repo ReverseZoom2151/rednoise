@@ -1,6 +1,6 @@
 #include "Renderer.h"
 
-#include "BVH.h"
+#include "Scene.h"
 #include "Drawing.h"
 #include "Geometry.h"
 #include "Light.h"
@@ -118,15 +118,15 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 // Fraction of a light visible from `point` (1 = lit, 0 = shadowed). Point and
 // directional lights are binary; an area light (radius > 0) is sampled over a
 // fixed disk for soft shadows (deterministic pattern, so no noise).
-static float visibility(const Light &L, const glm::vec3 &point, const BVH &bvh, int ignoreIndex) {
+static float visibility(const Light &L, const glm::vec3 &point, const Scene &scene, int ignoreIndex) {
 	if (L.type == LightType::Directional) {
 		glm::vec3 dir = -glm::normalize(L.direction);
-		return bvh.occluded(point, dir, 1e6f, ignoreIndex) ? 0.0f : 1.0f;
+		return scene.occluded(point, dir, 1e6f, ignoreIndex) ? 0.0f : 1.0f;
 	}
 	if (L.radius <= 0.0f) {
 		glm::vec3 to = L.position - point;
 		float dist = glm::length(to);
-		return bvh.occluded(point, to / dist, dist, ignoreIndex) ? 0.0f : 1.0f;
+		return scene.occluded(point, to / dist, dist, ignoreIndex) ? 0.0f : 1.0f;
 	}
 	static const glm::vec2 kSamples[9] = {{0, 0},       {1, 0},        {-1, 0},       {0, 1},        {0, -1},
 	                                      {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
@@ -139,7 +139,7 @@ static float visibility(const Light &L, const glm::vec3 &point, const BVH &bvh, 
 		glm::vec3 samplePos = L.position + (tangent * s.x + bitangent * s.y) * L.radius;
 		glm::vec3 to = samplePos - point;
 		float dist = glm::length(to);
-		if (!bvh.occluded(point, to / dist, dist, ignoreIndex))
+		if (!scene.occluded(point, to / dist, dist, ignoreIndex))
 			unoccluded++;
 	}
 	return unoccluded / 9.0f;
@@ -149,7 +149,7 @@ static float visibility(const Light &L, const glm::vec3 &point, const BVH &bvh, 
 // + soft-shadow visibility summed over every light, on an ambient floor. `base`
 // is the surface's own colour (0..255).
 static glm::vec3 shadeSurface(const glm::vec3 &point, const glm::vec3 &normal, const glm::vec3 &viewDir,
-                              const std::vector<Light> &lights, const BVH &bvh, int ignoreIndex,
+                              const std::vector<Light> &lights, const Scene &scene, int ignoreIndex,
                               const glm::vec3 &base) {
 	const float ambient = 0.2f;
 	glm::vec3 diffuseAccum(0.0f);
@@ -169,7 +169,7 @@ static glm::vec3 shadeSurface(const glm::vec3 &point, const glm::vec3 &normal, c
 		float cone = 1.0f;
 		if (L.type == LightType::Spot)
 			cone = (glm::dot(-lightDir, glm::normalize(L.direction)) > L.coneCos) ? 1.0f : 0.0f;
-		float vis = visibility(L, point, bvh, ignoreIndex);
+		float vis = visibility(L, point, scene, ignoreIndex);
 		float incidence = std::max(0.0f, glm::dot(normal, lightDir));
 		float brightness = vis * cone * attenuation * incidence;
 		diffuseAccum += L.colour * brightness;
@@ -264,7 +264,7 @@ static glm::vec3 surfaceBaseColour(const RayTriangleIntersection &hit, const glm
 }
 
 static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection,
-                              const std::vector<Light> &lights, const BVH &bvh, ShadingModel shading) {
+                              const std::vector<Light> &lights, const Scene &scene, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
 	glm::vec3 point = hit.intersectionPoint;
 	glm::vec3 viewDir = -rayDirection;
@@ -280,11 +280,11 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 	if (shading == ShadingModel::Gouraud) {
 		// Shade each vertex, then interpolate the resulting colour.
 		glm::vec3 c0 = shadeSurface(tri.vertices[0], faceViewer(tri.vertexNormals[0], rayDirection), viewDir, lights,
-		                            bvh, ignore, base);
+		                            scene, ignore, base);
 		glm::vec3 c1 = shadeSurface(tri.vertices[1], faceViewer(tri.vertexNormals[1], rayDirection), viewDir, lights,
-		                            bvh, ignore, base);
+		                            scene, ignore, base);
 		glm::vec3 c2 = shadeSurface(tri.vertices[2], faceViewer(tri.vertexNormals[2], rayDirection), viewDir, lights,
-		                            bvh, ignore, base);
+		                            scene, ignore, base);
 		return w0 * c0 + w1 * c1 + w2 * c2;
 	}
 
@@ -295,14 +295,14 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 	normal = faceViewer(normal, rayDirection);
 	if (tri.material == Material::Bump)
 		normal = bumpNormal(normal, point);
-	return shadeSurface(point, normal, viewDir, lights, bvh, ignore, base);
+	return shadeSurface(point, normal, viewDir, lights, scene, ignore, base);
 }
 
 // Recursively trace a ray. Diffuse surfaces are shaded directly; mirrors reflect
 // and glass reflects + refracts (Fresnel-weighted), bounded by `depth`.
-static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const BVH &bvh,
+static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const Scene &scene,
                           const std::vector<Light> &lights, ShadingModel shading, int depth) {
-	RayTriangleIntersection hit = bvh.intersect(origin, direction);
+	RayTriangleIntersection hit = scene.intersect(origin, direction);
 	if (!hit.hit)
 		return environment(direction); // sky
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -311,7 +311,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 	if (depth > 0 && tri.material == Material::Mirror) {
 		glm::vec3 n = faceViewer(tri.normal, direction);
 		glm::vec3 reflected = glm::reflect(direction, n);
-		return traceRay(point + 1e-4f * reflected, reflected, bvh, lights, shading, depth - 1);
+		return traceRay(point + 1e-4f * reflected, reflected, scene, lights, shading, depth - 1);
 	}
 
 	if (depth > 0 && tri.material == Material::Glass) {
@@ -327,7 +327,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		}
 		float eta = etai / etat;
 		glm::vec3 reflected = glm::reflect(direction, n);
-		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, bvh, lights, shading, depth - 1);
+		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, scene, lights, shading, depth - 1);
 		glm::vec3 refracted = glm::refract(direction, n, eta);
 		if (glm::length(refracted) < 1e-6f)
 			return reflectionColour; // total internal reflection
@@ -335,11 +335,11 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		float r0 = (etai - etat) / (etai + etat);
 		r0 *= r0;
 		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
-		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, bvh, lights, shading, depth - 1);
+		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, scene, lights, shading, depth - 1);
 		return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
 	}
 
-	return shadeDiffuse(hit, direction, lights, bvh, shading);
+	return shadeDiffuse(hit, direction, lights, scene, shading);
 }
 
 // --- Monte-Carlo path tracer ------------------------------------------------
@@ -359,7 +359,7 @@ static glm::vec3 cosineHemisphere(const glm::vec3 &n, std::mt19937 &rng) {
 
 // Direct lighting (0..1) at a diffuse point, summed over the lights.
 static glm::vec3 directLight(const glm::vec3 &point, const glm::vec3 &normal, const glm::vec3 &albedo,
-                             const std::vector<Light> &lights, const BVH &bvh, int ignore) {
+                             const std::vector<Light> &lights, const Scene &scene, int ignore) {
 	glm::vec3 sum(0.0f);
 	for (const Light &L : lights) {
 		glm::vec3 lightDir;
@@ -376,7 +376,7 @@ static glm::vec3 directLight(const glm::vec3 &point, const glm::vec3 &normal, co
 		float cone = 1.0f;
 		if (L.type == LightType::Spot)
 			cone = (glm::dot(-lightDir, glm::normalize(L.direction)) > L.coneCos) ? 1.0f : 0.0f;
-		float vis = visibility(L, point, bvh, ignore);
+		float vis = visibility(L, point, scene, ignore);
 		float incidence = std::max(0.0f, glm::dot(normal, lightDir));
 		sum += L.colour * (vis * cone * attenuation * incidence);
 	}
@@ -387,9 +387,9 @@ static glm::vec3 directLight(const glm::vec3 &point, const glm::vec3 &normal, co
 // cosine-weighted indirect bounce (this is what produces colour bleeding /
 // global illumination). Mirror reflects; glass reflects or refracts
 // stochastically by Fresnel.
-static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, const BVH &bvh,
+static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, const Scene &scene,
                            const std::vector<Light> &lights, int depth, std::mt19937 &rng) {
-	RayTriangleIntersection hit = bvh.intersect(origin, direction);
+	RayTriangleIntersection hit = scene.intersect(origin, direction);
 	if (!hit.hit)
 		return environment(direction) / 255.0f;
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -399,7 +399,7 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 	if (tri.material == Material::Mirror && depth > 0) {
 		glm::vec3 n = faceViewer(tri.normal, direction);
 		glm::vec3 reflected = glm::reflect(direction, n);
-		return pathTrace(point + 1e-4f * reflected, reflected, bvh, lights, depth - 1, rng);
+		return pathTrace(point + 1e-4f * reflected, reflected, scene, lights, depth - 1, rng);
 	}
 	if (tri.material == Material::Glass && depth > 0) {
 		const float ior = 1.5f;
@@ -418,27 +418,27 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 		glm::vec3 refracted = glm::refract(direction, n, etai / etat);
 		std::uniform_real_distribution<float> U(0.0f, 1.0f);
 		glm::vec3 dir = (glm::length(refracted) < 1e-6f || U(rng) < fresnel) ? glm::reflect(direction, n) : refracted;
-		return pathTrace(point + 1e-4f * dir, dir, bvh, lights, depth - 1, rng);
+		return pathTrace(point + 1e-4f * dir, dir, scene, lights, depth - 1, rng);
 	}
 
-	glm::vec3 n = faceViewer(triangleNormal(tri), direction);
+	glm::vec3 n = faceViewer(tri.normal, direction);
 	glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
-	glm::vec3 direct = directLight(point, n, albedo, lights, bvh, ignore);
+	glm::vec3 direct = directLight(point, n, albedo, lights, scene, ignore);
 	if (depth <= 0)
 		return direct;
 	glm::vec3 bounce = cosineHemisphere(n, rng);
-	glm::vec3 indirect = albedo * pathTrace(point + 1e-4f * bounce, bounce, bvh, lights, depth - 1, rng);
+	glm::vec3 indirect = albedo * pathTrace(point + 1e-4f * bounce, bounce, scene, lights, depth - 1, rng);
 	return direct + indirect;
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
-                     ShadingModel shading, const std::vector<Light> &lights) {
+                     ShadingModel shading, const std::vector<Light> &lights, const std::vector<Sphere> &spheres) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const int maxDepth = 4;
-	BVH bvh(model); // build the acceleration structure once per frame
+	Scene scene(model, spheres); // triangles (BVH) + analytic spheres
 
 	// Default to one soft (area) light so shadows have a penumbra out of the box.
 	std::vector<Light> used = lights;
@@ -456,7 +456,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			// direction, then rotate into world space.
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-			glm::vec3 colour = traceRay(camera.position, direction, bvh, used, shading, maxDepth);
+			glm::vec3 colour = traceRay(camera.position, direction, scene, used, shading, maxDepth);
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));
@@ -467,13 +467,13 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
                       const std::vector<Light> &lights, float aperture, float focusDistance,
-                      const glm::vec3 &cameraMotion) {
+                      const glm::vec3 &cameraMotion, const std::vector<Sphere> &spheres) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const int maxDepth = 4;
-	BVH bvh(model);
+	Scene scene(model, spheres);
 
 	std::vector<Light> used = lights;
 	if (used.empty()) {
@@ -507,7 +507,7 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 					origin = camPos + (right * std::cos(ang) + up * std::sin(ang)) * rad;
 					direction = glm::normalize(focalPoint - origin);
 				}
-				sum += pathTrace(origin, direction, bvh, used, maxDepth, rng);
+				sum += pathTrace(origin, direction, scene, used, maxDepth, rng);
 			}
 			glm::vec3 colour = sum / static_cast<float>(samples) * 255.0f;
 			int r = std::min(255, static_cast<int>(colour.r));
