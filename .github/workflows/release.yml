@@ -125,12 +125,15 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.19.2
+      - name: Build wheel
+        uses: pypa/cibuildwheel@v2.23.4
         with:
           package-dir: bindings/python
         env:
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          # The binding is pure ctypes with no Python C extension, so one CPython
+          # drives the build and wheel.py-api=py3 (pyproject) tags it py3-none for
+          # all of Python 3. Build once per OS instead of once per version.
+          CIBW_BUILD: "cp312-*"
           CIBW_SKIP: "*musllinux*"
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
           CIBW_MANYLINUX_AARCH64_IMAGE: quay.io/pypa/manylinux_2_28_aarch64
@@ -190,9 +193,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Populate vendor/ with the C++ engine sources
         run: bash bindings/rust/vendor.sh
-      - name: Verify (cargo publish --dry-run)
-        env: { CC: gcc-13, CXX: g++-13 }
-        run: cargo publish --manifest-path bindings/rust/Cargo.toml --dry-run --allow-dirty
+      # No separate --dry-run step: cargo publish compiles + verifies the package
+      # before uploading anyway, so the dry-run only doubled the engine compile.
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

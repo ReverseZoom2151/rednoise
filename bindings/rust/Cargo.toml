@@ -1,6 +1,6 @@
 [package]
 name = "rednoise"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "Safe Rust bindings for the RedNoise CPU software renderer (wireframe, rasteriser, ray tracer, path tracer). Builds the C++ engine from source."

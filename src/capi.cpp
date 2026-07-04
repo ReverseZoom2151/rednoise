@@ -85,7 +85,7 @@ int rn_save_png(const char *path, int width, int height, const unsigned char *rg
 }
 
 const char *rn_version(void) {
-	return "0.1.1";
+	return "0.1.2";
 }
 
 } // extern "C"

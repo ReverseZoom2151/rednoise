@@ -1,6 +1,6 @@
 {
   "name": "rednoise",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "RedNoise: a CPU software renderer (wireframe, rasteriser, ray tracer, path tracer) with a stable C ABI.",
   "homepage": "https://github.com/ReverseZoom2151/rednoise",
   "license": "MIT",

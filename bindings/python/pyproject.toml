@@ -12,7 +12,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "rednoise"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python ctypes bindings for the RedNoise CPU software renderer, with the native library bundled."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -46,3 +46,8 @@ Issues = "https://github.com/ReverseZoom2151/rednoise/issues"
 minimum-version = "0.8"
 cmake.version = ">=3.24"
 wheel.packages = ["rednoise"]
+# The binding is pure ctypes loading a bundled shared library - there is no
+# Python C extension, so the wheel is platform-specific but Python-version
+# independent. Tag it py3-none-<platform> so ONE wheel per OS serves all of
+# Python 3 (and the build runs once per OS instead of once per version).
+wheel.py-api = "py3"
