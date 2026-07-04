@@ -22,3 +22,8 @@ const std::vector<ModelTriangle> &selectLOD(float distance, float switchDistance
 // every vertex along its interpolated normal by fractal-noise height * amplitude
 // and recompute normals. Unlike bump/parallax this changes the silhouette.
 std::vector<ModelTriangle> displaceMesh(const std::vector<ModelTriangle> &mesh, int levels, float amplitude);
+
+// Turn a mesh into a faceted mirror (a disco ball): every triangle becomes a
+// Mirror with flat per-facet normals, so each facet reflects like a flat tile
+// and throws separate reflection spots around the room.
+std::vector<ModelTriangle> facetMirror(const std::vector<ModelTriangle> &mesh);

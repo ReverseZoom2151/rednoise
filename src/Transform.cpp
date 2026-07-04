@@ -63,3 +63,14 @@ std::vector<ModelTriangle> displaceMesh(const std::vector<ModelTriangle> &mesh, 
 	}
 	return patches;
 }
+
+std::vector<ModelTriangle> facetMirror(const std::vector<ModelTriangle> &mesh) {
+	std::vector<ModelTriangle> out = mesh;
+	for (ModelTriangle &t : out) {
+		t.material = Material::Mirror;
+		glm::vec3 n = glm::normalize(glm::cross(t.vertices[1] - t.vertices[0], t.vertices[2] - t.vertices[0]));
+		t.normal = n;
+		t.vertexNormals = {n, n, n}; // flat facets, not smooth
+	}
+	return out;
+}

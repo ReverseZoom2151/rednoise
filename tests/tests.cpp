@@ -292,6 +292,17 @@ static void testDeepScanModules() {
 	float x0 = -5, y0 = 16, x1 = 40, y1 = 16;
 	CHECK(cohenSutherlandClip(x0, y0, x1, y1, 0, 0, 31, 31));
 	CHECK(x0 >= 0.0f && x1 <= 31.0f);
+
+	// Cramer's-rule intersection matches the matrix-inverse one.
+	ModelTriangle itri(glm::vec3(-1, -1, -2), glm::vec3(1, -1, -2), glm::vec3(0, 1, -2), Colour(255, 0, 0));
+	float t1, u1, v1, t2, u2, v2;
+	bool h1 = intersectTriangle(glm::vec3(0.1f, 0.0f, 0.0f), glm::vec3(0, 0, -1), itri, t1, u1, v1);
+	bool h2 = intersectTriangleCramer(glm::vec3(0.1f, 0.0f, 0.0f), glm::vec3(0, 0, -1), itri, t2, u2, v2);
+	CHECK(h1 && h2 && nearly(t1, t2) && nearly(u1, u2) && nearly(v1, v2));
+
+	// Disco ball: facetMirror makes every triangle a flat mirror facet.
+	std::vector<ModelTriangle> disco = facetMirror(tris);
+	CHECK(!disco.empty() && disco[0].material == Material::Mirror);
 }
 
 int main() {

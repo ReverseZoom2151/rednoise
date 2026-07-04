@@ -24,6 +24,24 @@ bool intersectTriangle(const glm::vec3 &origin, const glm::vec3 &direction, cons
 	return (u >= 0.0f) && (v >= 0.0f) && (u + v <= 1.0f) && (t > 1e-5f);
 }
 
+bool intersectTriangleCramer(const glm::vec3 &origin, const glm::vec3 &direction, const ModelTriangle &triangle,
+                             float &t, float &u, float &v) {
+	// Solve [-d, e0, e1] [t u v]^T = (o - v0) by Cramer's rule: each unknown is a
+	// determinant ratio. Same system as the matrix-inverse form, fewer ops.
+	glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+	glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+	glm::vec3 b = origin - triangle.vertices[0];
+	glm::vec3 nd = -direction;
+	float det = glm::determinant(glm::mat3(nd, e0, e1));
+	if (std::abs(det) < 1e-8f)
+		return false;
+	float inv = 1.0f / det;
+	t = glm::determinant(glm::mat3(b, e0, e1)) * inv;
+	u = glm::determinant(glm::mat3(nd, b, e1)) * inv;
+	v = glm::determinant(glm::mat3(nd, e0, b)) * inv;
+	return (u >= 0.0f) && (v >= 0.0f) && (u + v <= 1.0f) && (t > 1e-5f);
+}
+
 RayTriangleIntersection getClosestIntersection(const glm::vec3 &origin, const glm::vec3 &direction,
                                                const std::vector<ModelTriangle> &triangles, int ignoreIndex) {
 	RayTriangleIntersection closest; // hit = false, distance = +inf
