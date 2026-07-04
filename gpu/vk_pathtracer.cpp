@@ -8,7 +8,11 @@
 //
 // Usage: vk_pathtracer <obj> [out.png] [width] [height]
 
+// With a linked Vulkan SDK we use normal prototypes; without one we resolve
+// entry points at runtime from the loader (see RN_VULKAN_LINKED in CMake).
+#ifndef RN_VULKAN_LINKED
 #define VK_NO_PROTOTYPES
+#endif
 #include <vulkan/vulkan.h>
 
 #include "Camera.h"
@@ -32,6 +36,8 @@
 
 namespace {
 
+#ifndef RN_VULKAN_LINKED
+// No SDK: open the platform Vulkan loader and return vkGetInstanceProcAddr.
 PFN_vkGetInstanceProcAddr loadLoader() {
 #ifdef _WIN32
 	HMODULE lib = LoadLibraryA("vulkan-1.dll");
@@ -48,6 +54,7 @@ PFN_vkGetInstanceProcAddr loadLoader() {
 	return reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vkGetInstanceProcAddr"));
 #endif
 }
+#endif
 
 bool fail(const char *msg) {
 	std::fprintf(stderr, "vulkan: %s\n", msg);
@@ -105,11 +112,12 @@ int main(int argc, char **argv) {
 		setVec(tris[i].col, glm::vec3(t.colour.red, t.colour.green, t.colour.blue) / 255.0f);
 	}
 
+#ifndef RN_VULKAN_LINKED
 	PFN_vkGetInstanceProcAddr gipa = loadLoader();
 	if (!gipa)
 		return fail("could not load vulkan-1.dll / libvulkan.so.1 (is a driver installed?)"), 1;
-
 	auto vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(gipa(nullptr, "vkCreateInstance"));
+#endif
 	VkApplicationInfo app{};
 	app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	app.apiVersion = VK_API_VERSION_1_1;
@@ -120,6 +128,7 @@ int main(int argc, char **argv) {
 	if (vkCreateInstance(&ici, nullptr, &instance) != VK_SUCCESS)
 		return fail("vkCreateInstance failed"), 1;
 
+#ifndef RN_VULKAN_LINKED
 #define IFN(name) auto name = reinterpret_cast<PFN_##name>(gipa(instance, #name))
 	IFN(vkEnumeratePhysicalDevices);
 	IFN(vkGetPhysicalDeviceProperties);
@@ -152,6 +161,7 @@ int main(int argc, char **argv) {
 	IFN(vkQueueSubmit);
 	IFN(vkWaitForFences);
 #undef IFN
+#endif
 
 	// Pick the first physical device and a compute-capable queue family.
 	uint32_t nDev = 0;

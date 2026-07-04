@@ -41,3 +41,12 @@ Resolved via CMake `find_package(SDL3 CONFIG)` / the `SDL3::SDL3` target, or
 
 Single-header PNG/image writer, public domain (or MIT, at your option). Vendored
 and used by `Canvas::savePNG` and the C ABI `rn_save_png`.
+
+## Vulkan
+
+Only for the optional Vulkan compute path tracer (BUILD_VULKAN). https://www.vulkan.org
+Resolved find-first-then-fetch: `find_package(Vulkan)` if an SDK is present (links
+`Vulkan::Vulkan`), otherwise the Khronos Vulkan-Headers are fetched
+(https://github.com/KhronosGroup/Vulkan-Headers, Apache-2.0 / MIT) and the
+driver's loader is used at runtime. Vulkan and the Vulkan logo are trademarks of
+the Khronos Group.

@@ -11,4 +11,5 @@ imply endorsement.
 | sdl.png | SDL | libsdl.org (`SDL_logo.png`) |
 | opencl.png | OpenCL (Khronos) | Wikimedia Commons, `File:OpenCL_logo.svg` |
 | glm.png | OpenGL (glm = OpenGL Mathematics) | Wikimedia Commons, `File:OpenGL_logo.svg` |
+| vulkan.png | Vulkan (Khronos) | Wikimedia Commons, `File:Vulkan_API_logo.svg` |
 | openmp.png | OpenMP | Wikimedia Commons, `File:OpenMP_logo.svg` |

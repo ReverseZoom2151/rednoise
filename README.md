@@ -141,6 +141,7 @@ including the GPU path tracer and the ocean-water simulation, is built.
 <img src="assets/logos/cmake.png" height="34" alt="CMake">&nbsp;&nbsp;&nbsp;&nbsp;
 <img src="assets/logos/sdl.png" height="30" alt="SDL3">&nbsp;&nbsp;&nbsp;&nbsp;
 <img src="assets/logos/opencl.png" height="30" alt="OpenCL">&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="assets/logos/vulkan.png" height="26" alt="Vulkan">&nbsp;&nbsp;&nbsp;&nbsp;
 <img src="assets/logos/glm.png" height="30" alt="glm">&nbsp;&nbsp;&nbsp;&nbsp;
 <img src="assets/logos/openmp.png" height="30" alt="OpenMP">
 </div>
@@ -157,6 +158,7 @@ works whether or not you have the libraries installed.
 | <img src="assets/logos/sdl.png" height="18"> | [SDL3](https://www.libsdl.org) | System package (vcpkg / distro), else fetched + built | Only the interactive app |
 | <img src="assets/logos/opencl.png" height="18"> | [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-ICD-Loader) | System SDK (vendor / CUDA), else fetched Khronos headers + loader | Only the GPU path tracer |
 | <img src="assets/logos/opencl.png" height="18"> | OpenCL runtime | GPU driver | Cannot be fetched: it is the vendor's driver; keep the driver current |
+| <img src="assets/logos/vulkan.png" height="14"> | [Vulkan](https://www.vulkan.org) | System SDK (find_package), else fetched Vulkan-Headers + runtime loader | Only the Vulkan compute tracer; needs a Vulkan driver at runtime |
 | <img src="assets/logos/openmp.png" height="18"> | [OpenMP](https://www.openmp.org) | Compiler | Cannot be fetched: it is a compiler feature (libgomp/libomp/vcomp); optional |
 
 Knobs, if you want to override the default:
@@ -259,12 +261,13 @@ level: `cmake -B build -DBUILD_GPU=ON -DOPENCL_TARGET_VERSION=300`.
 
 ### Vulkan compute path tracer (headless)
 
-A second GPU backend that ray-traces in a Vulkan compute shader. It is
-**SDK-free**: it declares no Vulkan prototypes and loads `vulkan-1.dll` /
-`libvulkan.so.1` at runtime, so the build needs only the Khronos Vulkan-Headers
-(fetched automatically) and it runs against any installed Vulkan driver. The
-compute shader is precompiled to SPIR-V and committed, so no shader compiler is
-needed to build either.
+A second GPU backend that ray-traces in a Vulkan compute shader. Vulkan is
+resolved **find-first, then fetch** like the other dependencies: with a Vulkan
+SDK present the build links `Vulkan::Vulkan` and calls the API through normal
+prototypes; without one it fetches only the Khronos Vulkan-Headers and loads
+`vulkan-1.dll` / `libvulkan.so.1` at runtime (so it still builds with just a
+driver, no SDK). The compute shader is precompiled to SPIR-V and committed, so no
+shader compiler is needed to build either way.
 
 ```sh
 cmake -B build -S . -DBUILD_VULKAN=ON     # fetches Vulkan-Headers

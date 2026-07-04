@@ -302,20 +302,31 @@ endif ()
 # driver (no SDK, no import library). Off by default. glslang (fetched in a later
 # step) compiles the compute shader to SPIR-V.
 if (BUILD_VULKAN)
-    include(FetchContent)
-    FetchContent_Declare(VulkanHeaders
-            GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
-            GIT_TAG main GIT_SHALLOW TRUE
-            FIND_PACKAGE_ARGS NAMES VulkanHeaders)
-    FetchContent_MakeAvailable(VulkanHeaders)
-
     add_executable(vk_pathtracer gpu/vk_pathtracer.cpp)
     target_include_directories(vk_pathtracer PRIVATE gpu)
-    target_link_libraries(vk_pathtracer PRIVATE rn_engine Vulkan::Headers)
-    if (NOT WIN32)
-        target_link_libraries(vk_pathtracer PRIVATE ${CMAKE_DL_LIBS})
+    target_link_libraries(vk_pathtracer PRIVATE rn_engine)
+
+    # Find-first, then fetch - exactly like OpenCL. If a Vulkan SDK is present we
+    # link Vulkan::Vulkan and call the API through normal prototypes; otherwise we
+    # fetch only the Khronos headers and load the driver's loader at runtime
+    # (VK_NO_PROTOTYPES). Either way it needs just a Vulkan driver to run.
+    find_package(Vulkan QUIET)
+    if (Vulkan_FOUND)
+        target_link_libraries(vk_pathtracer PRIVATE Vulkan::Vulkan)
+        target_compile_definitions(vk_pathtracer PRIVATE RN_VULKAN_LINKED=1)
+        message(STATUS "Vulkan: system SDK ${Vulkan_VERSION} (linked Vulkan::Vulkan)")
+    else ()
+        include(FetchContent)
+        FetchContent_Declare(VulkanHeaders
+                GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+                GIT_TAG main GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(VulkanHeaders)
+        target_link_libraries(vk_pathtracer PRIVATE Vulkan::Headers)
+        if (NOT WIN32)
+            target_link_libraries(vk_pathtracer PRIVATE ${CMAKE_DL_LIBS})
+        endif ()
+        message(STATUS "Vulkan: no SDK found; fetched Vulkan-Headers + runtime loader")
     endif ()
-    message(STATUS "Vulkan: headless compute path tracer (dynamic vulkan-1 loader, no SDK needed)")
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------
