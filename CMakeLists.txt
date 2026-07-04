@@ -24,6 +24,7 @@ option(BUILD_APP "Build the RedNoise application (requires SDL3)" ON)
 option(BUILD_TESTS "Build the unit tests" ON)
 option(BUILD_HEADLESS "Build the headless PPM renderer (no SDL3)" ON)
 option(BUILD_GPU "Build the OpenCL GPU path tracer (requires an OpenCL SDK)" OFF)
+option(BUILD_VULKAN "Build the headless Vulkan compute path tracer (fetches Vulkan-Headers + glslang)" OFF)
 option(BUILD_LIB "Build the installable rednoise library + C API" ON)
 
 # Optional: multithread the ray tracer. Correctness does not depend on it, so a
@@ -293,6 +294,27 @@ if (BUILD_GPU)
         message(WARNING "BUILD_GPU=ON but no OpenCL SDK found; skipping gpu_pathtracer. "
                 "Enable FETCH_DEPENDENCIES, or install any vendor's OpenCL SDK.")
     endif ()
+endif ()
+
+# --- Vulkan compute path tracer (headless) ----------------------------------
+# Self-contained and SDK-free: fetches the Khronos Vulkan-Headers and loads
+# vulkan-1.dll / libvulkan.so.1 dynamically at runtime, so it needs only a Vulkan
+# driver (no SDK, no import library). Off by default. glslang (fetched in a later
+# step) compiles the compute shader to SPIR-V.
+if (BUILD_VULKAN)
+    include(FetchContent)
+    FetchContent_Declare(VulkanHeaders
+            GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+            GIT_TAG main GIT_SHALLOW TRUE
+            FIND_PACKAGE_ARGS NAMES VulkanHeaders)
+    FetchContent_MakeAvailable(VulkanHeaders)
+
+    add_executable(vk_pathtracer gpu/vk_pathtracer.cpp)
+    target_link_libraries(vk_pathtracer PRIVATE Vulkan::Headers)
+    if (NOT WIN32)
+        target_link_libraries(vk_pathtracer PRIVATE ${CMAKE_DL_LIBS})
+    endif ()
+    message(STATUS "Vulkan: headless compute path tracer (dynamic vulkan-1 loader, no SDK needed)")
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------
