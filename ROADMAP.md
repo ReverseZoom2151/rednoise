@@ -150,7 +150,7 @@ that were not in the original plan.
 | [done] Photon-map final gather | COMS30115 gallery | done |
 | [done] Named PBR material presets + camera roll | Raytracer_Bristol / COMS30020 | done |
 | [done] Classic radiosity (patches + gathering) | COMS30115 lecture 14 | done |
-| Bidirectional path tracing | COMS30115 lecture 15 | pending |
+| [done] Bidirectional path tracing | COMS30115 lecture 15 | done |
 | Metropolis light transport (PSSMLT) | COMS30115 lecture 15 | pending |
 
 ---
