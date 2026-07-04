@@ -25,6 +25,7 @@
 #include "Scene.h"
 #include "SceneGraph.h"
 #include "Sky.h"
+#include "Tonemap.h"
 #include "Transform.h"
 #include "Voxel.h"
 #include <Canvas.h>
@@ -382,6 +383,14 @@ static void testDeepScanModules() {
 		CHECK(std::abs(nd.y - dx) < 1e-2f); // analytic d/dx
 		CHECK(std::abs(nd.w - dz) < 1e-2f); // analytic d/dz
 	}
+
+	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
+	// brightens midtones and round-trips.
+	CHECK(nearly(applyExposure(glm::vec3(0.5f), 1.0f).r, 1.0f)); // +1 EV = x2
+	CHECK(acesFilmic(glm::vec3(0.0f)).r < 1e-3f);
+	CHECK(acesFilmic(glm::vec3(100.0f)).r > 0.95f);                       // highlights saturate near 1
+	CHECK(linearToSRGB(glm::vec3(0.5f)).r > 0.5f);                        // sRGB lifts midtones
+	CHECK(nearly(sRGBToLinear(linearToSRGB(glm::vec3(0.36f))).r, 0.36f)); // round-trip
 }
 
 int main() {
