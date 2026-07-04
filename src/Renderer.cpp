@@ -392,6 +392,20 @@ static float visibility(const Light &L, const glm::vec3 &point, const Scene &sce
 		glm::vec3 dir = -glm::normalize(L.direction);
 		return scene.occluded(point, dir, 1e6f, ignoreIndex) ? 0.0f : 1.0f;
 	}
+	if (L.type == LightType::Rectangle) {
+		// Sample a fixed 3x3 grid over the rectangle for a soft rectangular penumbra.
+		static const glm::vec2 kGrid[9] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {0, 0},
+		                                   {1, 0},   {-1, 1}, {0, 1},  {1, 1}};
+		int unoccluded = 0;
+		for (const glm::vec2 &s : kGrid) {
+			glm::vec3 samplePos = L.position + L.uAxis * s.x + L.vAxis * s.y;
+			glm::vec3 to = samplePos - point;
+			float dist = glm::length(to);
+			if (!scene.occluded(point, to / dist, dist, ignoreIndex))
+				unoccluded++;
+		}
+		return unoccluded / 9.0f;
+	}
 	if (L.radius <= 0.0f) {
 		glm::vec3 to = L.position - point;
 		float dist = glm::length(to);

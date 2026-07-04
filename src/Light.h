@@ -3,8 +3,9 @@
 #include <glm/glm.hpp>
 
 // Point/Spot with radius > 0 is a flat (disk) area light; Volume samples a whole
-// sphere of radius `radius` for an emitter with genuine 3D extent.
-enum class LightType { Point, Directional, Spot, Volume };
+// sphere of radius `radius`; Rectangle samples a uAxis-by-vAxis rectangle for a
+// soft rectangular penumbra (e.g. a softbox / window light).
+enum class LightType { Point, Directional, Spot, Volume, Rectangle };
 
 // A light source. A point light with radius > 0 is an area light (soft shadows).
 struct Light {
@@ -20,4 +21,7 @@ struct Light {
 	float attenConstant = 0.0f;
 	float attenLinear = 0.0f;
 	float attenQuadratic = 12.566370f; // 4*pi
+	// Half-extent vectors of a Rectangle light (spanning position +- uAxis +- vAxis).
+	glm::vec3 uAxis{0.3f, 0.0f, 0.0f};
+	glm::vec3 vAxis{0.0f, 0.0f, 0.3f};
 };
