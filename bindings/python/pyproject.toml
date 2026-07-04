@@ -63,3 +63,7 @@ skip = "*musllinux*"
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "quay.io/pypa/manylinux_2_34_x86_64"
 manylinux-aarch64-image = "quay.io/pypa/manylinux_2_34_aarch64"
+# The image is used, but CMake otherwise finds its legacy default gcc
+# (devtoolset-10 = GCC 10, too old for C++23). Put the modern gcc-toolset first
+# on PATH so gcc/g++ resolve to GCC 14/13 for the build.
+environment = { PATH = "/opt/rh/gcc-toolset-14/root/usr/bin:/opt/rh/gcc-toolset-13/root/usr/bin:$PATH", CC = "gcc", CXX = "g++" }
