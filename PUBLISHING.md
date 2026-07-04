@@ -15,12 +15,12 @@ Release flow:
 - Bump the version in every manifest (see "Cutting a release").
 - Commit the version bump.
 - Create an annotated tag `vX.Y.Z` and push it.
-- `.github/workflows/release.yml` fires on the pushed `v*` tag. It builds the Linux, macOS, and Windows binaries and CREATES the GitHub Release (via softprops/action-gh-release), attaching the binaries as assets.
-- When that GitHub Release is published, three publish workflows fire automatically on `release: published`:
-  - `.github/workflows/publish-python.yml` -> builds wheels (cibuildwheel) plus an sdist and publishes to PyPI.
-  - `.github/workflows/publish-rust.yml` -> vendors the C++ sources and runs `cargo publish` to crates.io.
-  - `.github/workflows/publish-npm.yml` -> builds the WASM package (Emscripten) and runs `npm publish --provenance` to npm.
-- Each publish workflow also supports `workflow_dispatch`, so you can re-run any single registry publish by hand from the Actions tab.
+- `.github/workflows/release.yml` fires on the pushed `v*` tag. It is one pipeline with jobs that run in parallel:
+  - `binaries`: builds the Linux, macOS, and Windows binaries and CREATES the GitHub Release (softprops/action-gh-release), attaching them as assets.
+  - `python-wheels` + `python-sdist` + `python-publish`: builds wheels (cibuildwheel) and an sdist, then publishes to PyPI via Trusted Publishing (OIDC, no token).
+  - `rust-publish`: vendors the C++ sources and runs `cargo publish` to crates.io (`CARGO_REGISTRY_TOKEN`).
+  - `npm-publish`: builds the WASM package (Emscripten) and runs `npm publish --provenance` to npm (`NPM_TOKEN`).
+- The workflow also supports `workflow_dispatch`; you can re-run individual failed jobs from the Actions tab. (Note: a manual dispatch runs the publish jobs too, which publish for real.)
 
 Diagram:
 
@@ -28,17 +28,12 @@ Diagram:
   git tag vX.Y.Z + push
           |
           v
-  release.yml
-   - builds Linux / macOS / Windows binaries
-   - CREATES + publishes the GitHub Release
-          |
-          |  (on: release: published)
-          |
-   +------+---------------------+
-   |      |                     |
-   v      v                     v
- publish-python   publish-rust     publish-npm
-   -> PyPI          -> crates.io      -> npm
+  release.yml  (one workflow, parallel jobs)
+   |         |            |            |
+   v         v            v            v
+ binaries  python-*     rust-publish  npm-publish
+ -> GitHub -> PyPI       -> crates.io  -> npm
+    Release
 ```
 
 ## 2. One-time setup
@@ -51,7 +46,7 @@ Do this once per registry. After it is done, every future release publishes auto
 2. In the PyPI project settings, add a Trusted Publisher with these values:
    - Owner: `ReverseZoom2151`
    - Repository: `rednoise`
-   - Workflow: `publish-python.yml`
+   - Workflow: `release.yml`
    - Environment: optional (leave blank unless you configured one)
 3. No API token or repo secret is required. Publishing uses OIDC (`id-token: write`).
 
@@ -75,7 +70,7 @@ Reference: https://docs.pypi.org/trusted-publishers/
 ### GitHub Actions permissions
 
 - Actions must have `contents: write` so `release.yml` can create the release. This is already set.
-- The publish workflows that use OIDC (PyPI Trusted Publishing and npm provenance) need `id-token: write`. Confirm this permission is present in `publish-python.yml` and `publish-npm.yml`.
+- The jobs that use OIDC (the `python-publish` and `npm-publish` jobs, for PyPI Trusted Publishing and npm provenance) set `id-token: write` on themselves. This is already in `release.yml`.
 
 ## 3. Cutting a release
 
@@ -145,7 +140,7 @@ Each command requires you to be authenticated locally (`cargo login`, a PyPI tok
 
 After a release, confirm everything landed:
 
-- GitHub -> Actions: `release.yml` and all three `publish-*` workflow runs are green.
+- GitHub -> Actions: the `release.yml` run is green (all its jobs: binaries, python-publish, rust-publish, npm-publish).
 - PyPI: https://pypi.org/project/rednoise shows the new version.
 - crates.io: https://crates.io/crates/rednoise shows the new version.
 - npm: https://www.npmjs.com/package/rednoise shows the new version.

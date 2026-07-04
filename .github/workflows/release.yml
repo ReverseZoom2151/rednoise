@@ -1,7 +1,13 @@
 name: Release
 
-# Builds headless-only binaries for Linux, macOS and Windows and attaches
-# them to the GitHub Release created for a pushed v* tag.
+# One release pipeline, triggered by a pushed v* tag (or a manual run):
+#   - build headless binaries for Linux/macOS/Windows and attach them to the
+#     GitHub Release
+#   - build + publish the Python wheels to PyPI (Trusted Publishing)
+#   - publish the Rust crate to crates.io
+#   - build the WASM package and publish it to npm
+#
+# The PyPI Trusted Publisher must reference this file: Workflow name = release.yml.
 
 on:
   push:
@@ -13,8 +19,11 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.os }}
+  # -------------------------------------------------------------------------
+  # Prebuilt binaries -> GitHub Release
+  # -------------------------------------------------------------------------
+  binaries:
+    name: Binaries ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -26,7 +35,6 @@ jobs:
             os_name: macos
           - os: windows-latest
             os_name: windows
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -72,7 +80,6 @@ jobs:
         run: |
           pkg="rednoise-${{ matrix.os_name }}-${{ steps.arch.outputs.arch }}"
           mkdir -p "$pkg"
-          # Headless binaries land directly in build/ (single-config generators).
           cp build/rn "$pkg/"
           if [ -f build/render_headless ]; then cp build/render_headless "$pkg/"; fi
           cp -r assets "$pkg/"
@@ -87,7 +94,6 @@ jobs:
         run: |
           $pkg = "rednoise-${{ matrix.os_name }}-${{ steps.arch.outputs.arch }}"
           New-Item -ItemType Directory -Force -Path $pkg | Out-Null
-          # Multi-config generators (MSVC) place binaries under build/Release.
           $rn = if (Test-Path "build/Release/rn.exe") { "build/Release/rn.exe" } else { "build/rn.exe" }
           Copy-Item $rn -Destination $pkg
           $rh = if (Test-Path "build/Release/render_headless.exe") { "build/Release/render_headless.exe" } elseif (Test-Path "build/render_headless.exe") { "build/render_headless.exe" } else { $null }
@@ -106,3 +112,117 @@ jobs:
           files: ${{ env.ASSET }}
           fail_on_unmatched_files: true
           generate_release_notes: true
+
+  # -------------------------------------------------------------------------
+  # Python -> PyPI (wheels + sdist, Trusted Publishing)
+  # -------------------------------------------------------------------------
+  python-wheels:
+    name: Python wheels ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.19.2
+        with:
+          package-dir: bindings/python
+        env:
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_SKIP: "*musllinux*"
+          CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
+          CIBW_MANYLINUX_AARCH64_IMAGE: quay.io/pypa/manylinux_2_28_aarch64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  python-sdist:
+    name: Python sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        run: pipx run build --sdist
+        working-directory: bindings/python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: bindings/python/dist/*.tar.gz
+
+  python-publish:
+    name: Publish to PyPI
+    needs: [python-wheels, python-sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # Trusted Publishing (OIDC): no token needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # For a TestPyPI dry run, set repository-url and add a matching
+        # Trusted Publisher on test.pypi.org:
+        # with:
+        #   repository-url: https://test.pypi.org/legacy/
+
+  # -------------------------------------------------------------------------
+  # Rust -> crates.io (builds the C++ engine from vendored sources)
+  # -------------------------------------------------------------------------
+  rust-publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install a C++23 compiler (gcc-13)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13 g++-13
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 130 \
+            --slave /usr/bin/g++ g++ /usr/bin/g++-13
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Populate vendor/ with the C++ engine sources
+        run: bash bindings/rust/vendor.sh
+      - name: Verify (cargo publish --dry-run)
+        env: { CC: gcc-13, CXX: g++-13 }
+        run: cargo publish --manifest-path bindings/rust/Cargo.toml --dry-run --allow-dirty
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CC: gcc-13
+          CXX: g++-13
+        run: cargo publish --manifest-path bindings/rust/Cargo.toml --allow-dirty
+
+  # -------------------------------------------------------------------------
+  # WASM -> npm (Emscripten build + provenance)
+  # -------------------------------------------------------------------------
+  npm-publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+      - name: Build WebAssembly module
+        run: bash build.sh
+        working-directory: bindings/wasm
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        working-directory: bindings/wasm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
