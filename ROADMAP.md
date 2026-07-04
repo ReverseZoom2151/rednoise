@@ -45,15 +45,15 @@ fully-shaded ray tracer and beyond.
 | [done] Translate + rotate | WASD/arrows move; X/Y/Z rotation matrices on position + orientation. | ● | 20, 15 |
 | [done] lookAt | Build an orthonormal basis aimed at a target point. | ● | 20, 15, RT, CG |
 | [done] Orbit | Rotate the camera around the scene each frame, re-aiming via lookAt. | ● | 20 |
-| Pitch / mouse-look | Up-down tilt and `SDL_GetRelativeMouseState` free-look. | ●● | 15 |
+| [done] Pitch / mouse-look | Up-down tilt and `SDL_GetRelativeMouseState` free-look. | ●● | 15 |
 
 ## Phase 3 - Core raytracer
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
 | [done] Ray-triangle intersection | Moller-Trumbore / matrix-inverse barycentric solve; closest-hit search. | ●● | 20, 15, CG, RT |
-| Hard shadows | Shadow ray to the light; occlusion darkens the pixel. | ●● | 20, 15, CG, RT |
-| Diffuse + ambient | Inverse-square proximity, angle-of-incidence Lambert, ambient floor. | ●● | 20, 15, CG, RT |
+| [done] Hard shadows | Shadow ray to the light; occlusion darkens the pixel. | ●● | 20, 15, CG, RT |
+| [done] Diffuse + ambient | Inverse-square proximity, angle-of-incidence Lambert, ambient floor. | ●● | 20, 15, CG, RT |
 | [done] Render-mode toggle | Switch wireframe / rasterise / raytrace on number keys. | ● | 20 |
 
 ## Phase 4 - Shading models

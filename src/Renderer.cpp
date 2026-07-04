@@ -82,7 +82,43 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 	}
 }
 
-void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
+// Shade a hit: proximity + angle-of-incidence diffuse, an ambient floor, and a
+// hard shadow ray toward the light.
+static uint32_t shadeHit(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
+                         const std::vector<ModelTriangle> &model) {
+	const float lightIntensity = 40.0f;
+	const float ambient = 0.2f;
+
+	glm::vec3 point = hit.intersectionPoint;
+	glm::vec3 normal = triangleNormal(hit.intersectedTriangle);
+	// Orient the normal toward the viewer (rayDirection points camera -> surface).
+	if (glm::dot(normal, rayDirection) > 0.0f)
+		normal = -normal;
+
+	glm::vec3 toLight = light - point;
+	float distance = glm::length(toLight);
+	glm::vec3 lightDir = toLight / distance;
+
+	float proximity = lightIntensity / (4.0f * 3.14159265f * distance * distance);
+	float incidence = std::max(0.0f, glm::dot(normal, lightDir));
+	float brightness = proximity * incidence;
+
+	// Hard shadow: something between the surface and the light occludes it.
+	RayTriangleIntersection shadow =
+	    getClosestIntersection(point, lightDir, model, static_cast<int>(hit.triangleIndex));
+	if (shadow.hit && shadow.distanceFromCamera < distance)
+		brightness = 0.0f;
+
+	brightness = std::min(1.0f, std::max(brightness, ambient));
+	const Colour &c = hit.intersectedTriangle.colour;
+	int r = static_cast<int>(c.red * brightness);
+	int g = static_cast<int>(c.green * brightness);
+	int b = static_cast<int>(c.blue * brightness);
+	return (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+}
+
+void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                     const glm::vec3 &light) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -96,7 +132,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
 			RayTriangleIntersection hit = getClosestIntersection(camera.position, direction, model);
 			if (hit.hit)
-				canvas.setPixelColour(x, y, hit.intersectedTriangle.colour.toUint32());
+				canvas.setPixelColour(x, y, shadeHit(hit, direction, light, model));
 		}
 	}
 }

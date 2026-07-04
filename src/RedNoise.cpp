@@ -106,12 +106,20 @@ void handleEvent(SDL_Event event) {
 			renderMode = RenderMode::Raytraced;
 			std::cout << "raytraced" << std::endl;
 			break;
+		// Save a screenshot.
+		case SDLK_P:
+			canvas.savePPM("output.ppm");
+			std::cout << "saved output.ppm" << std::endl;
+			break;
 		default:
 			break;
 		}
-	} else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-		canvas.savePPM("output.ppm");
-		std::cout << "saved output.ppm" << std::endl;
+	} else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+		// Drag with the left mouse button held to look around.
+		if (event.motion.state & SDL_BUTTON_LMASK) {
+			camera.rotateY(event.motion.xrel * 0.005f);
+			camera.rotateX(event.motion.yrel * 0.005f);
+		}
 	}
 }
 
