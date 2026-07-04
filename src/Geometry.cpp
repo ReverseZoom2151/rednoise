@@ -31,6 +31,8 @@ RayTriangleIntersection getClosestIntersection(const glm::vec3 &origin, const gl
 			closest.intersectionPoint = origin + t * direction;
 			closest.intersectedTriangle = triangle;
 			closest.triangleIndex = i;
+			closest.u = u;
+			closest.v = v;
 		}
 	}
 	return closest;

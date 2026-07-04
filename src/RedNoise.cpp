@@ -14,6 +14,7 @@
 enum class RenderMode { Wireframe, Rasterised, Raytraced };
 
 static RenderMode renderMode = RenderMode::Rasterised;
+static ShadingModel shadingModel = ShadingModel::Phong;
 static Camera camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
 static Canvas canvas(WIDTH, HEIGHT);
 static bool orbiting = false;
@@ -40,7 +41,7 @@ void draw() {
 		renderRasterised(model, camera, canvas);
 		break;
 	case RenderMode::Raytraced:
-		renderRaytraced(model, camera, canvas);
+		renderRaytraced(model, camera, canvas, shadingModel);
 		break;
 	}
 }
@@ -105,6 +106,19 @@ void handleEvent(SDL_Event event) {
 		case SDLK_3:
 			renderMode = RenderMode::Raytraced;
 			std::cout << "raytraced" << std::endl;
+			break;
+		// Shading model (ray tracer).
+		case SDLK_4:
+			shadingModel = ShadingModel::Flat;
+			std::cout << "flat" << std::endl;
+			break;
+		case SDLK_5:
+			shadingModel = ShadingModel::Gouraud;
+			std::cout << "gouraud" << std::endl;
+			break;
+		case SDLK_6:
+			shadingModel = ShadingModel::Phong;
+			std::cout << "phong" << std::endl;
 			break;
 		// Save a screenshot.
 		case SDLK_P:

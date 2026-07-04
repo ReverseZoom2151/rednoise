@@ -82,51 +82,81 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 	}
 }
 
-// Shade a hit: proximity + angle-of-incidence diffuse, an ambient floor, and a
-// hard shadow ray toward the light.
-static uint32_t shadeHit(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
-                         const std::vector<ModelTriangle> &model) {
+// Diffuse (with ambient floor) + specular for one surface point and normal.
+struct Shade {
+	float brightness;
+	float specular;
+};
+
+static Shade lightPoint(const glm::vec3 &point, const glm::vec3 &normal, const glm::vec3 &viewDir,
+                        const glm::vec3 &light, bool inShadow) {
 	const float lightIntensity = 40.0f;
 	const float ambient = 0.2f;
-
-	glm::vec3 point = hit.intersectionPoint;
-	glm::vec3 normal = triangleNormal(hit.intersectedTriangle);
-	// Orient the normal toward the viewer (rayDirection points camera -> surface).
-	if (glm::dot(normal, rayDirection) > 0.0f)
-		normal = -normal;
-
 	glm::vec3 toLight = light - point;
 	float distance = glm::length(toLight);
 	glm::vec3 lightDir = toLight / distance;
-
-	// Hard shadow: something between the surface and the light occludes it.
-	RayTriangleIntersection shadow =
-	    getClosestIntersection(point, lightDir, model, static_cast<int>(hit.triangleIndex));
-	bool inShadow = shadow.hit && shadow.distanceFromCamera < distance;
-
 	float proximity = lightIntensity / (4.0f * 3.14159265f * distance * distance);
 	float incidence = std::max(0.0f, glm::dot(normal, lightDir));
 	float diffuse = inShadow ? 0.0f : proximity * incidence;
-
-	// Specular highlight (Blinn/Phong): reflect the light about the normal and
-	// compare with the view direction. Added as a white highlight.
 	float specular = 0.0f;
 	if (!inShadow && incidence > 0.0f) {
-		glm::vec3 viewDir = -rayDirection;
 		glm::vec3 reflectDir = 2.0f * glm::dot(normal, lightDir) * normal - lightDir;
 		specular = std::pow(std::max(0.0f, glm::dot(reflectDir, viewDir)), 64.0f);
 	}
+	return {std::min(1.0f, std::max(diffuse, ambient)), specular};
+}
 
-	float brightness = std::min(1.0f, std::max(diffuse, ambient));
-	const Colour &c = hit.intersectedTriangle.colour;
-	int r = std::min(255, static_cast<int>(c.red * brightness + 255.0f * specular));
-	int g = std::min(255, static_cast<int>(c.green * brightness + 255.0f * specular));
-	int b = std::min(255, static_cast<int>(c.blue * brightness + 255.0f * specular));
+// Flip a normal to face the viewer (rayDirection points camera -> surface).
+static glm::vec3 faceViewer(glm::vec3 normal, const glm::vec3 &rayDirection) {
+	return (glm::dot(normal, rayDirection) > 0.0f) ? -normal : normal;
+}
+
+static uint32_t shadeHit(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
+                         const std::vector<ModelTriangle> &model, ShadingModel shading) {
+	const ModelTriangle &tri = hit.intersectedTriangle;
+	glm::vec3 point = hit.intersectionPoint;
+	glm::vec3 viewDir = -rayDirection;
+
+	// One shadow test at the hit point, shared by all shading models.
+	glm::vec3 toLight = light - point;
+	float lightDistance = glm::length(toLight);
+	glm::vec3 lightDir = toLight / lightDistance;
+	RayTriangleIntersection shadow =
+	    getClosestIntersection(point, lightDir, model, static_cast<int>(hit.triangleIndex));
+	bool inShadow = shadow.hit && shadow.distanceFromCamera < lightDistance;
+
+	// Barycentric weights (vertex 0 gets 1-u-v).
+	float w0 = 1.0f - hit.u - hit.v;
+	float w1 = hit.u;
+	float w2 = hit.v;
+
+	Shade shade;
+	if (shading == ShadingModel::Gouraud) {
+		Shade s0 =
+		    lightPoint(tri.vertices[0], faceViewer(tri.vertexNormals[0], rayDirection), viewDir, light, inShadow);
+		Shade s1 =
+		    lightPoint(tri.vertices[1], faceViewer(tri.vertexNormals[1], rayDirection), viewDir, light, inShadow);
+		Shade s2 =
+		    lightPoint(tri.vertices[2], faceViewer(tri.vertexNormals[2], rayDirection), viewDir, light, inShadow);
+		shade.brightness = w0 * s0.brightness + w1 * s1.brightness + w2 * s2.brightness;
+		shade.specular = w0 * s0.specular + w1 * s1.specular + w2 * s2.specular;
+	} else {
+		glm::vec3 normal =
+		    (shading == ShadingModel::Phong)
+		        ? glm::normalize(w0 * tri.vertexNormals[0] + w1 * tri.vertexNormals[1] + w2 * tri.vertexNormals[2])
+		        : tri.normal;
+		shade = lightPoint(point, faceViewer(normal, rayDirection), viewDir, light, inShadow);
+	}
+
+	const Colour &c = tri.colour;
+	int r = std::min(255, static_cast<int>(c.red * shade.brightness + 255.0f * shade.specular));
+	int g = std::min(255, static_cast<int>(c.green * shade.brightness + 255.0f * shade.specular));
+	int b = std::min(255, static_cast<int>(c.blue * shade.brightness + 255.0f * shade.specular));
 	return (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
-                     const glm::vec3 &light) {
+                     ShadingModel shading, const glm::vec3 &light) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -140,7 +170,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
 			RayTriangleIntersection hit = getClosestIntersection(camera.position, direction, model);
 			if (hit.hit)
-				canvas.setPixelColour(x, y, shadeHit(hit, direction, light, model));
+				canvas.setPixelColour(x, y, shadeHit(hit, direction, light, model, shading));
 		}
 	}
 }

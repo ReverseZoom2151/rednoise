@@ -61,9 +61,9 @@ fully-shaded ray tracer and beyond.
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
 | [done] Specular highlights | Phong or Blinn-Phong `pow(R·V, n)` term. | ●● | 20, RT |
-| Per-vertex normals | Read `vn` from OBJ, else average adjacent face normals; enables smooth shading. | ●● | 20 |
-| Gouraud shading | Light per vertex, interpolate brightness across the triangle. | ●● | 20, 15 |
-| Phong shading | Interpolate the normal per pixel, light per pixel (default in ref). | ●●● | 20, 15 |
+| [done] Per-vertex normals | Read `vn` from OBJ, else average adjacent face normals; enables smooth shading. | ●● | 20 |
+| [done] Gouraud shading | Light per vertex, interpolate brightness across the triangle. | ●● | 20, 15 |
+| [done] Phong shading | Interpolate the normal per pixel, light per pixel (default in ref). | ●●● | 20, 15 |
 
 ## Phase 5 - Materials and optics
 
