@@ -126,15 +126,25 @@ ctest --test-dir build --output-on-failure          # unit tests
 
 ### GPU path tracer (OpenCL)
 
-Optional, needs an OpenCL SDK (e.g. the one bundled with the CUDA toolkit).
-Enable the target and run it from the repo root (the kernel `gpu/pathtracer.cl`
-loads at runtime):
+Optional and vendor-neutral: standard OpenCL, no CUDA. It builds against whatever
+OpenCL SDK is installed (any vendor's, or the Khronos headers + ICD loader; the
+CUDA toolkit bundles one) and runs on any conformant device - discrete or
+integrated GPU, or even a CPU OpenCL runtime. It enumerates all devices, prefers
+a GPU but falls back to anything, and lets you pick. Progressive accumulation
+means weaker hardware just converges over more frames rather than failing, so the
+same binary scales from a laptop iGPU to a workstation card.
 
 ```sh
-cmake -B build -S . -DBUILD_GPU=ON
+cmake -B build -S . -DBUILD_GPU=ON      # find_package(OpenCL), uses newest SDK
 cmake --build build
-./build/gpu_pathtracer assets/cornell-box.obj gpu.ppm 320 240 8 120
+./build/gpu_pathtracer --list                                   # list OpenCL devices
+./build/gpu_pathtracer assets/cornell-box.obj gpu.ppm 320 240 8 120     # render (auto device)
+./build/gpu_pathtracer assets/cornell-box.obj gpu.ppm 320 240 8 120 1   # ... on device index 1
 ```
+
+The code uses the OpenCL 1.2 API subset for the broadest reach but runs on newer
+runtimes (3.0, etc.) at full speed. Require a newer runtime by raising the target
+level: `cmake -B build -DBUILD_GPU=ON -DOPENCL_TARGET_VERSION=300`.
 
 ## Controls (interactive app)
 

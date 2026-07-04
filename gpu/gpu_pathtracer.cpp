@@ -1,15 +1,31 @@
 // Host program for the OpenCL path tracer: loads the Cornell box, uploads the
-// triangles to the GPU, runs pathtracer.cl over `frames` progressive passes,
+// triangles to the device, runs pathtracer.cl over `frames` progressive passes,
 // times each pass, and writes the tone-mapped image to PPM. Reports the device
 // and the achieved frames-per-second.
 //
-// Build (from repo root):
-//   clang++ -std=c++23 gpu/gpu_pathtracer.cpp <engine .cpp files> \
-//     -Iframework -Ithird_party -Isrc -I"<CUDA>/include" "<CUDA>/lib/x64/OpenCL.lib" -o gpu_pt
-// Run:
-//   ./gpu_pt assets/cornell-box.obj out.ppm 320 240 8 60
+// Hardware-agnostic by design: it enumerates every OpenCL platform + device,
+// prefers a GPU but falls back to any device (including a CPU runtime), and lets
+// you pick one explicitly. It targets OpenCL 1.2 (the most widely supported
+// level) so it runs on essentially any conformant runtime. Progressive
+// accumulation means weaker hardware simply converges over more frames rather
+// than failing - the same binary adapts from an integrated GPU to a workstation
+// card. The only hard requirement is an OpenCL SDK to build against (any
+// vendor's, or the Khronos headers + ICD loader) and a runtime to execute.
+//
+// Build via CMake: cmake -B build -DBUILD_GPU=ON  (uses find_package(OpenCL)).
+// Run (from repo root, so the kernel + assets resolve):
+//   ./gpu_pathtracer assets/cornell-box.obj out.ppm 320 240 8 60 [deviceIndex]
+//   ./gpu_pathtracer --list      # just list the available OpenCL devices
 
-#define CL_TARGET_OPENCL_VERSION 300
+// We BUILD against the latest OpenCL SDK on the machine, but only USE the 1.2
+// API subset so the binary RUNS on any conformant runtime (including the newest
+// 3.0 ones, at full speed). This is a compatibility floor, not an old
+// dependency - override it at build time (e.g. -DCL_TARGET_OPENCL_VERSION=300)
+// to require a newer runtime.
+#ifndef CL_TARGET_OPENCL_VERSION
+#define CL_TARGET_OPENCL_VERSION 120
+#endif
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #include <CL/cl.h>
 
 #include "Camera.h"
@@ -41,13 +57,61 @@ static std::string readFile(const char *path) {
 	return ss.str();
 }
 
+struct Device {
+	cl_platform_id platform;
+	cl_device_id device;
+};
+
+// Every device across every platform (GPUs, CPUs, accelerators - whatever the
+// installed OpenCL runtimes expose).
+static std::vector<Device> enumerateDevices() {
+	std::vector<Device> devices;
+	cl_uint numPlatforms = 0;
+	clGetPlatformIDs(0, nullptr, &numPlatforms);
+	std::vector<cl_platform_id> platforms(numPlatforms);
+	if (numPlatforms)
+		clGetPlatformIDs(numPlatforms, platforms.data(), nullptr);
+	for (cl_platform_id p : platforms) {
+		cl_uint numDevices = 0;
+		clGetDeviceIDs(p, CL_DEVICE_TYPE_ALL, 0, nullptr, &numDevices);
+		std::vector<cl_device_id> devs(numDevices);
+		if (numDevices)
+			clGetDeviceIDs(p, CL_DEVICE_TYPE_ALL, numDevices, devs.data(), nullptr);
+		for (cl_device_id d : devs)
+			devices.push_back({p, d});
+	}
+	return devices;
+}
+
+static void printDevice(int index, const Device &e) {
+	char pn[256] = "", dn[256] = "", ver[128] = "";
+	cl_device_type type = 0;
+	cl_uint cu = 0;
+	clGetPlatformInfo(e.platform, CL_PLATFORM_NAME, sizeof(pn), pn, nullptr);
+	clGetDeviceInfo(e.device, CL_DEVICE_NAME, sizeof(dn), dn, nullptr);
+	clGetDeviceInfo(e.device, CL_DEVICE_TYPE, sizeof(type), &type, nullptr);
+	clGetDeviceInfo(e.device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cu), &cu, nullptr);
+	clGetDeviceInfo(e.device, CL_DEVICE_VERSION, sizeof(ver), ver, nullptr); // runtime OpenCL version
+	const char *kind = (type & CL_DEVICE_TYPE_GPU) ? "GPU" : (type & CL_DEVICE_TYPE_CPU) ? "CPU" : "accelerator";
+	std::printf("  [%d] %s | %s (%s, %u compute units, %s)\n", index, pn, dn, kind, cu, ver);
+}
+
 int main(int argc, char **argv) {
+	if (argc > 1 && std::string(argv[1]) == "--list") {
+		std::vector<Device> all = enumerateDevices();
+		std::printf("OpenCL devices (%zu):\n", all.size());
+		for (int i = 0; i < static_cast<int>(all.size()); i++)
+			printDevice(i, all[i]);
+		return 0;
+	}
+
 	const char *objPath = argc > 1 ? argv[1] : "assets/cornell-box.obj";
 	const char *outPath = argc > 2 ? argv[2] : "gpu.ppm";
 	int W = argc > 3 ? std::atoi(argv[3]) : 320;
 	int H = argc > 4 ? std::atoi(argv[4]) : 240;
 	int samples = argc > 5 ? std::atoi(argv[5]) : 8;
 	int frames = argc > 6 ? std::atoi(argv[6]) : 60;
+	int deviceIndex = argc > 7 ? std::atoi(argv[7]) : -1; // -1 = auto (prefer GPU)
 
 	// Load geometry and flatten to 16 floats per triangle.
 	std::vector<ModelTriangle> model = loadOBJ(objPath, 0.35f);
@@ -77,17 +141,40 @@ int main(int argc, char **argv) {
 	cl_float4 camFwd = {{cam.orientation[2].x, cam.orientation[2].y, cam.orientation[2].z, 0}};
 	float f = cam.focalLength * cam.scale;
 
-	// OpenCL setup.
-	cl_platform_id platform;
-	check(clGetPlatformIDs(1, &platform, nullptr), "platform");
-	cl_device_id device;
-	check(clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr), "device");
+	// Enumerate every device and choose one: an explicit index if given, else
+	// the first GPU, else the first device of any kind (so a CPU-only OpenCL
+	// runtime still works).
+	std::vector<Device> devices = enumerateDevices();
+	if (devices.empty()) {
+		std::fprintf(stderr, "no OpenCL devices found (is an OpenCL runtime installed?)\n");
+		return 1;
+	}
+	std::printf("OpenCL devices (%zu):\n", devices.size());
+	for (int i = 0; i < static_cast<int>(devices.size()); i++)
+		printDevice(i, devices[i]);
+	int chosen = deviceIndex;
+	if (chosen < 0 || chosen >= static_cast<int>(devices.size())) {
+		chosen = 0;
+		for (int i = 0; i < static_cast<int>(devices.size()); i++) {
+			cl_device_type type = 0;
+			clGetDeviceInfo(devices[i].device, CL_DEVICE_TYPE, sizeof(type), &type, nullptr);
+			if (type & CL_DEVICE_TYPE_GPU) {
+				chosen = i;
+				break;
+			}
+		}
+	}
+	cl_device_id device = devices[chosen].device;
 	char devName[256];
 	clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(devName), devName, nullptr);
+	std::printf("using device [%d]: %s\n", chosen, devName);
+	std::printf("built targeting OpenCL API %d.%d (runs on that or any newer runtime)\n",
+	            CL_TARGET_OPENCL_VERSION / 100, (CL_TARGET_OPENCL_VERSION / 10) % 10);
+
 	cl_int err;
 	cl_context ctx = clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
 	check(err, "context");
-	cl_command_queue queue = clCreateCommandQueueWithProperties(ctx, device, nullptr, &err);
+	cl_command_queue queue = clCreateCommandQueue(ctx, device, 0, &err); // 1.2 API, universally available
 	check(err, "queue");
 
 	std::string src = readFile("gpu/pathtracer.cl");
@@ -108,8 +195,8 @@ int main(int argc, char **argv) {
 
 	std::vector<float> accumZero(static_cast<size_t>(W) * H * 3, 0.0f);
 	std::vector<uint8_t> outImg(static_cast<size_t>(W) * H * 4, 0);
-	cl_mem trisBuf = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, tris.size() * sizeof(float),
-	                                tris.data(), &err);
+	cl_mem trisBuf =
+	    clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, tris.size() * sizeof(float), tris.data(), &err);
 	check(err, "trisBuf");
 	cl_mem accumBuf = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, accumZero.size() * sizeof(float),
 	                                 accumZero.data(), &err);

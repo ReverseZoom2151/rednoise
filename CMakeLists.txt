@@ -107,12 +107,26 @@ if (BUILD_HEADLESS)
 endif ()
 
 # --- GPU path tracer (OpenCL) -----------------------------------------------
-# The kernel gpu/pathtracer.cl is loaded at runtime; run from the repo root.
+# Vendor-neutral: standard OpenCL via find_package, runs on any conformant
+# device. The kernel gpu/pathtracer.cl is loaded at runtime; run from the repo
+# root. If no OpenCL SDK is found we warn and skip rather than fail the build.
+# OPENCL_TARGET_VERSION is the API level the code is COMPILED to use: 120 is the
+# maximum-compatibility floor (runs on any conformant runtime); set it to 300 to
+# require an OpenCL 3.0 runtime. It is independent of the SDK version found -
+# find_package always picks up the newest headers/loader installed.
+set(OPENCL_TARGET_VERSION 120 CACHE STRING "OpenCL API level to target (120 = broadest, 300 = require 3.0)")
 if (BUILD_GPU)
-    find_package(OpenCL REQUIRED)
-    add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp ${ENGINE_SOURCES})
-    target_include_directories(gpu_pathtracer PRIVATE framework third_party src)
-    target_link_libraries(gpu_pathtracer PRIVATE OpenCL::OpenCL)
+    find_package(OpenCL)
+    if (OpenCL_FOUND)
+        message(STATUS "OpenCL SDK ${OpenCL_VERSION_STRING} found; compiling to target API ${OPENCL_TARGET_VERSION}")
+        add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp ${ENGINE_SOURCES})
+        target_include_directories(gpu_pathtracer PRIVATE framework third_party src)
+        target_compile_definitions(gpu_pathtracer PRIVATE CL_TARGET_OPENCL_VERSION=${OPENCL_TARGET_VERSION})
+        target_link_libraries(gpu_pathtracer PRIVATE OpenCL::OpenCL)
+    else ()
+        message(WARNING "BUILD_GPU=ON but no OpenCL SDK found; skipping gpu_pathtracer. "
+                "Install any vendor's OpenCL SDK (or the Khronos headers + ICD loader).")
+    endif ()
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------
