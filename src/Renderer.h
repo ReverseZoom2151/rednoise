@@ -40,6 +40,13 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
                       const std::vector<Light> &lights = {}, float aperture = 0.0f, float focusDistance = 4.0f,
                       const glm::vec3 &cameraMotion = glm::vec3(0.0f), const std::vector<Sphere> &spheres = {});
 
+// Photon mapping: emit `numPhotons` from the light (reflecting/refracting through
+// mirrors and glass, which focuses caustics), then gather them for indirect
+// light + caustics on top of direct lighting.
+void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                        int numPhotons = 200000, const std::vector<Light> &lights = {},
+                        const std::vector<Sphere> &spheres = {});
+
 // Post-filters over a rendered canvas.
 void toneMap(Canvas &canvas, float exposure = 1.0f, float gamma = 2.2f);
 void applyFXAA(Canvas &canvas);

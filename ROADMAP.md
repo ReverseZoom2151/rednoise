@@ -112,8 +112,8 @@ fully-shaded ray tracer and beyond.
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
 | [done] Multi-bounce indirect / colour bleeding | Secondary diffuse bounces for the classic Cornell glow. | ●●●● | 15, CG |
-| Photon mapping + final gather | Emit photons, gather radiance; caustics and GI. | ●●●●● | CG, 15 |
-| Caustics | Focused light through glass/water onto surfaces. | ●●●●● | 15 |
+| [done] Photon mapping | Emit photons, gather radiance; caustics and GI. | ●●●●● | CG, 15 |
+| [done] Caustics (via photon mapping) | Focused light through glass/water onto surfaces. | ●●●●● | 15 |
 | [done] Path tracing | Monte-Carlo GI; the reference standard for realism. | ●●●●● | 15 |
 
 ## Phase 10 - Content, output and polish

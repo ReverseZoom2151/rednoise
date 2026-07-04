@@ -5,6 +5,7 @@
 #include "Geometry.h"
 #include "Light.h"
 #include "Noise.h"
+#include "Photon.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -637,6 +638,161 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 				sum += pathTrace(origin, direction, scene, used, maxDepth, rng);
 			}
 			glm::vec3 colour = sum / static_cast<float>(samples) * 255.0f;
+			int r = std::min(255, static_cast<int>(colour.r));
+			int g = std::min(255, static_cast<int>(colour.g));
+			int b = std::min(255, static_cast<int>(colour.b));
+			canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
+		}
+	}
+}
+
+// --- Photon mapping ---------------------------------------------------------
+
+// Trace one photon: reflect through mirrors/metal, reflect-or-refract through
+// glass (which focuses caustics), and deposit it on the first diffuse surface,
+// then optionally bounce (Russian roulette by albedo) to spread indirect light.
+static void tracePhoton(const Scene &scene, const glm::vec3 &origin, const glm::vec3 &direction, const glm::vec3 &power,
+                        int depth, std::vector<Photon> &out, std::mt19937 &rng) {
+	if (depth < 0)
+		return;
+	RayTriangleIntersection hit = scene.intersect(origin, direction);
+	if (!hit.hit)
+		return;
+	const ModelTriangle &tri = hit.intersectedTriangle;
+	glm::vec3 point = hit.intersectionPoint;
+	glm::vec3 n = faceViewer(tri.normal, direction);
+	std::uniform_real_distribution<float> U(0.0f, 1.0f);
+
+	if (tri.material == Material::Mirror) {
+		glm::vec3 r = glm::reflect(direction, n);
+		tracePhoton(scene, point + 1e-4f * r, r, power, depth - 1, out, rng);
+		return;
+	}
+	if (tri.material == Material::Metal) {
+		glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+		glm::vec3 r = glm::reflect(direction, n);
+		tracePhoton(scene, point + 1e-4f * r, r, power * albedo, depth - 1, out, rng);
+		return;
+	}
+	if (tri.material == Material::Glass) {
+		const float ior = 1.5f;
+		glm::vec3 nn = tri.normal;
+		float cosi = glm::dot(direction, nn);
+		float etai = 1.0f, etat = ior;
+		if (cosi < 0.0f)
+			cosi = -cosi;
+		else {
+			std::swap(etai, etat);
+			nn = -nn;
+		}
+		float r0 = (etai - etat) / (etai + etat);
+		r0 *= r0;
+		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
+		glm::vec3 refr = glm::refract(direction, nn, etai / etat);
+		glm::vec3 d = (glm::length(refr) < 1e-6f || U(rng) < fresnel) ? glm::reflect(direction, nn) : refr;
+		tracePhoton(scene, point + 1e-4f * d, d, power, depth - 1, out, rng);
+		return;
+	}
+
+	out.push_back({point, power, direction}); // deposit on the diffuse surface
+	glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+	float p = std::max({albedo.r, albedo.g, albedo.b});
+	if (depth > 0 && U(rng) < p) {
+		glm::vec3 d = cosineHemisphere(n, rng);
+		tracePhoton(scene, point + 1e-4f * d, d, power * albedo / p, depth - 1, out, rng);
+	}
+}
+
+// Shade a camera ray using a prebuilt photon map: direct lighting plus the
+// gathered photon irradiance (which carries indirect light and caustics).
+static glm::vec3 photonShade(const glm::vec3 &origin, const glm::vec3 &direction, const Scene &scene,
+                             const std::vector<Light> &lights, const PhotonMap &map, float radius, int depth) {
+	RayTriangleIntersection hit = scene.intersect(origin, direction);
+	if (!hit.hit)
+		return environment(direction) / 255.0f;
+	const ModelTriangle &tri = hit.intersectedTriangle;
+	glm::vec3 point = hit.intersectionPoint;
+	glm::vec3 n = faceViewer(tri.normal, direction);
+
+	if (depth > 0 && tri.material == Material::Mirror) {
+		glm::vec3 r = glm::reflect(direction, n);
+		return photonShade(point + 1e-4f * r, r, scene, lights, map, radius, depth - 1);
+	}
+	if (depth > 0 && tri.material == Material::Metal) {
+		glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+		glm::vec3 r = glm::reflect(direction, n);
+		return albedo * photonShade(point + 1e-4f * r, r, scene, lights, map, radius, depth - 1);
+	}
+	if (depth > 0 && tri.material == Material::Glass) {
+		const float ior = 1.5f;
+		glm::vec3 nn = tri.normal;
+		float cosi = glm::dot(direction, nn);
+		float etai = 1.0f, etat = ior;
+		if (cosi < 0.0f)
+			cosi = -cosi;
+		else {
+			std::swap(etai, etat);
+			nn = -nn;
+		}
+		float r0 = (etai - etat) / (etai + etat);
+		r0 *= r0;
+		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
+		glm::vec3 reflected = glm::reflect(direction, nn);
+		glm::vec3 reflCol = photonShade(point + 1e-4f * reflected, reflected, scene, lights, map, radius, depth - 1);
+		glm::vec3 refr = glm::refract(direction, nn, etai / etat);
+		if (glm::length(refr) < 1e-6f)
+			return reflCol;
+		glm::vec3 refrCol = photonShade(point + 1e-4f * refr, refr, scene, lights, map, radius, depth - 1);
+		return fresnel * reflCol + (1.0f - fresnel) * refrCol;
+	}
+
+	glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+	glm::vec3 direct = directLight(point, n, albedo, lights, scene, static_cast<int>(hit.triangleIndex));
+	glm::vec3 indirect = albedo * map.gather(point, n, radius); // indirect light + caustics
+	return direct + indirect;
+}
+
+void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int numPhotons,
+                        const std::vector<Light> &lights, const std::vector<Sphere> &spheres) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	float f = camera.focalLength * camera.scale;
+	const float radius = 0.25f;
+	Scene scene(model, spheres);
+
+	std::vector<Light> used = lights;
+	if (used.empty()) {
+		Light d;
+		d.radius = 0.15f;
+		used.push_back(d);
+	}
+
+	// Pass 1: emit photons from the first light in all directions and trace them.
+	std::vector<Photon> photons;
+	std::mt19937 rng(777);
+	std::uniform_real_distribution<float> U(0.0f, 1.0f);
+	const Light &L = used[0];
+	const float emitScale = 1.8f;
+	for (int i = 0; i < numPhotons; i++) {
+		float z = 1.0f - 2.0f * U(rng);
+		float a = 2.0f * 3.14159265f * U(rng);
+		float r = std::sqrt(std::max(0.0f, 1.0f - z * z));
+		glm::vec3 dir(r * std::cos(a), z, r * std::sin(a));
+		glm::vec3 power = L.colour * (L.intensity * emitScale / numPhotons);
+		tracePhoton(scene, L.position, dir, power, 5, photons, rng);
+	}
+	PhotonMap map;
+	map.photons = std::move(photons);
+	map.build(radius);
+
+	// Pass 2: gather at each camera ray's diffuse hit.
+#pragma omp parallel for schedule(dynamic, 4)
+	for (int y = 0; y < H; y++) {
+		for (int x = 0; x < W; x++) {
+			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
+			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
+			glm::vec3 colour = photonShade(camera.position, direction, scene, used, map, radius, 4) * 255.0f;
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));
