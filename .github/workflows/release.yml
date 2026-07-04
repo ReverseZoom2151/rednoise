@@ -44,13 +44,16 @@ jobs:
           cmake -S . -B build
           -DBUILD_APP=OFF
           -DBUILD_GPU=OFF
-          -DBUILD_LIB=ON
+          -DBUILD_LIB=OFF
           -DBUILD_HEADLESS=ON
           -DBUILD_TESTS=OFF
           -DCMAKE_BUILD_TYPE=Release
 
+      # Build only the shipped binary (the `rn` CLI). The other headless tools and
+      # the library each recompile the whole engine, so restricting the target is
+      # the single biggest speedup for the release build.
       - name: Build Release
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel --target rednoise_cli
 
       - name: Determine architecture
         id: arch
