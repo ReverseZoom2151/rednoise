@@ -6,7 +6,7 @@ import os
 
 class RednoiseConan(ConanFile):
     name = "rednoise"
-    version = "0.1.0"
+    version = "0.1.1"
     license = "MIT"
     author = "ReverseZoom2151"
     url = "https://github.com/ReverseZoom2151/rednoise"

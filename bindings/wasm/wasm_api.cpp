@@ -92,7 +92,7 @@ int rn_wasm_render(const char *objText, int objLen, int mode, int width, int hei
 EMSCRIPTEN_KEEPALIVE
 const char *rn_wasm_version(void) {
 	const char *v = rn_version();
-	return v ? v : "0.1.0";
+	return v ? v : "0.1.1";
 }
 
 } // extern "C"

@@ -345,7 +345,7 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 	if (p.command == "version") {
-		std::cout << "rednoise 0.1.0\n";
+		std::cout << "rednoise 0.1.1\n";
 		return 0;
 	}
 	if (p.has("help")) {

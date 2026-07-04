@@ -15,7 +15,7 @@ extern "C" {
 
 #define RN_VERSION_MAJOR 0
 #define RN_VERSION_MINOR 1
-#define RN_VERSION_PATCH 0
+#define RN_VERSION_PATCH 1
 
 /* An opaque loaded scene. */
 typedef struct rn_scene rn_scene;
