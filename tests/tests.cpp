@@ -6,6 +6,7 @@
 #include "Geometry.h"
 #include "Interpolation.h"
 #include "Clouds.h"
+#include "Bezier.h"
 #include "Blackbody.h"
 #include "IrradianceCache.h"
 #include "QMC.h"
@@ -338,6 +339,18 @@ static void testDeepScanModules() {
 			maxGap = std::max(maxGap, h[i] - h[i - 1]);
 		CHECK(maxGap < 0.2f); // low-discrepancy: no big empty gap
 	}
+
+	// Bezier: a bicubic patch with raised centre control points tessellates to
+	// 2*res*res triangles, with the surface centre lifted in y.
+	std::array<glm::vec3, 16> patch{};
+	for (int r = 0; r < 4; r++)
+		for (int c = 0; c < 4; c++) {
+			float y = (r == 1 || r == 2) && (c == 1 || c == 2) ? 1.0f : 0.0f; // inner control points raised
+			patch[r * 4 + c] = glm::vec3(c / 3.0f, y, r / 3.0f);
+		}
+	CHECK(bezierPatchPoint(patch, 0.5f, 0.5f).y > 0.3f); // surface bulges up in the middle
+	std::vector<ModelTriangle> patchTris = tessellateBezierPatch(patch, 8, Colour(180, 120, 90));
+	CHECK(patchTris.size() == static_cast<size_t>(2 * 8 * 8));
 }
 
 int main() {

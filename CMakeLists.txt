@@ -124,6 +124,7 @@ set(ENGINE_SOURCES
         src/Blackbody.cpp
         src/QMC.cpp
         src/Grid.cpp
+        src/Bezier.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
