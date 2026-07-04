@@ -939,6 +939,109 @@ void renderVolumetric(const std::vector<ModelTriangle> &model, const Camera &cam
 	}
 }
 
+// --- Stochastic (delta-tracking) volume rendering --------------------------
+// Density of a Perlin-modulated spherical cloud at world point p (0 outside).
+static float mcCloudDensity(const glm::vec3 &p, const glm::vec3 &centre, float R) {
+	float r = glm::length(p - centre);
+	if (r > R)
+		return 0.0f;
+	float edge = 1.0f - r / R; // soft falloff to the boundary
+	float n = 0.5f + 0.5f * fractalNoise(p * 2.4f + glm::vec3(4.7f), 5);
+	return std::max(0.0f, (n - 0.42f) * 2.4f * edge);
+}
+
+// The t-interval [t0,t1] the ray (ro,rd) spends inside the bounding sphere.
+static bool raySphereSpan(const glm::vec3 &ro, const glm::vec3 &rd, const glm::vec3 &c, float R, float &t0, float &t1) {
+	glm::vec3 oc = ro - c;
+	float b = glm::dot(oc, rd), disc = b * b - (glm::dot(oc, oc) - R * R);
+	if (disc < 0.0f)
+		return false;
+	float s = std::sqrt(disc);
+	t0 = std::max(0.0f, -b - s);
+	t1 = -b + s;
+	return t1 > t0;
+}
+
+// Ratio-tracking transmittance from p along dir through the cloud to its exit.
+static float mcTransmittance(const glm::vec3 &p, const glm::vec3 &dir, const glm::vec3 &c, float R, float sigmaMax,
+                             std::mt19937 &rng) {
+	float t0, t1;
+	if (!raySphereSpan(p, dir, c, R, t0, t1))
+		return 1.0f;
+	std::uniform_real_distribution<float> U(0.0f, 1.0f);
+	float t = t0, Tr = 1.0f;
+	while (true) {
+		t -= std::log(1.0f - U(rng)) / sigmaMax;
+		if (t >= t1)
+			break;
+		Tr *= 1.0f - mcCloudDensity(p + dir * t, c, R) / sigmaMax;
+		if (Tr < 0.02f)
+			break;
+	}
+	return Tr;
+}
+
+void renderVolumetricMC(const std::vector<ModelTriangle> &, const Camera &camera, Canvas &canvas,
+                        const std::vector<Light> &lights, const Primitives &, float densityScale, int samples) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width), H = static_cast<int>(canvas.height);
+	float f = camera.focalLength * camera.scale;
+	const glm::vec3 centre(0.0f), sunCol(1.7f, 1.55f, 1.35f);
+	const float R = 1.3f, sigmaMax = densityScale;
+	glm::vec3 sunDir = glm::normalize(glm::vec3(0.5f, 0.7f, 0.4f));
+	if (!lights.empty() && lights[0].type == LightType::Directional)
+		sunDir = glm::normalize(-lights[0].direction);
+
+#pragma omp parallel for schedule(dynamic, 4)
+	for (int y = 0; y < H; y++) {
+		std::mt19937 rng(static_cast<unsigned>(y) * 9781u + 17u);
+		std::uniform_real_distribution<float> U(0.0f, 1.0f);
+		for (int x = 0; x < W; x++) {
+			glm::vec3 accum(0.0f);
+			for (int s = 0; s < samples; s++) {
+				glm::vec3 ro, rd;
+				camera.primaryRay(x + U(rng) - W / 2.0f, -(y + U(rng) - H / 2.0f), f, ro, rd);
+				glm::vec3 sky = glm::mix(glm::vec3(0.75f, 0.85f, 1.0f), glm::vec3(0.35f, 0.55f, 0.9f),
+				                         0.5f * (rd.y + 1.0f)); // background
+				float t0, t1;
+				if (!raySphereSpan(ro, rd, centre, R, t0, t1)) {
+					accum += sky;
+					continue;
+				}
+				// Delta tracking: step to a candidate collision, accept as a real
+				// scatter with probability density/sigmaMax.
+				float t = t0;
+				bool scattered = false;
+				glm::vec3 sp(0.0f);
+				while (true) {
+					t -= std::log(1.0f - U(rng)) / sigmaMax;
+					if (t >= t1)
+						break;
+					glm::vec3 xp = ro + rd * t;
+					if (U(rng) < mcCloudDensity(xp, centre, R) / sigmaMax) {
+						scattered = true;
+						sp = xp;
+						break;
+					}
+				}
+				if (!scattered) {
+					accum += sky;
+					continue;
+				}
+				// Single scatter to the sun (isotropic phase 1/4pi), plus a little
+				// ambient sky so shadowed cloud is not pure black.
+				float Tr = mcTransmittance(sp + sunDir * 1e-3f, sunDir, centre, R, sigmaMax, rng);
+				glm::vec3 inscatter = sunCol * Tr * (1.0f / (4.0f * 3.14159265f)) * 12.0f;
+				accum += inscatter + glm::vec3(0.28f, 0.33f, 0.42f);
+			}
+			glm::vec3 c = accum / static_cast<float>(samples) * 255.0f;
+			int r = std::min(255, static_cast<int>(c.r)), g = std::min(255, static_cast<int>(c.g)),
+			    b = std::min(255, static_cast<int>(c.b));
+			canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
+		}
+	}
+}
+
 // Sample a point in a unit lens aperture: a disk when blades < 3, else a regular
 // polygon with `blades` sides (shaped bokeh). u1,u2 are uniform in [0,1).
 static glm::vec2 sampleAperture(int blades, float u1, float u2) {

@@ -71,6 +71,14 @@ void renderVolumetric(const std::vector<ModelTriangle> &model, const Camera &cam
                       const std::vector<Light> &lights = {}, const Primitives &prims = {}, float density = 0.6f,
                       int steps = 48);
 
+// Stochastic (delta-tracking) Monte-Carlo volume rendering of a Perlin cloud
+// sphere lit by a directional sun: finds a scatter event by delta tracking and
+// single-scatters to the sun with ratio-tracking transmittance. densityScale is
+// the maximum extinction; more samples reduce the MC noise.
+void renderVolumetricMC(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                        const std::vector<Light> &lights = {}, const Primitives &prims = {}, float densityScale = 6.0f,
+                        int samples = 64);
+
 // Accumulation buffer: average many (jittered) render passes into one image, for
 // progressive anti-aliasing / depth of field / motion blur / noise reduction.
 class AccumBuffer {
