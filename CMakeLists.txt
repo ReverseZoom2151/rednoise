@@ -129,6 +129,20 @@ set(ENGINE_SOURCES
         framework/TexturePoint.cpp
         framework/Utils.cpp)
 
+# Compile the engine ONCE into a static library that every tool, the app and the
+# tests link, instead of each executable recompiling all ~34 engine files. This
+# is the single biggest build-time win. glm and OpenMP are PUBLIC so consumers
+# inherit the include paths and threading; the framework/src include dirs too.
+# (The installable `rednoise` library below deliberately compiles its OWN copy so
+# that OpenMP never enters its export set - downstream links only rednoise::rednoise.)
+add_library(rn_engine STATIC ${ENGINE_SOURCES})
+target_include_directories(rn_engine PUBLIC framework src)
+target_link_libraries(rn_engine PUBLIC glm_headers)
+set_target_properties(rn_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if (OpenMP_CXX_FOUND)
+    target_link_libraries(rn_engine PUBLIC OpenMP::OpenMP_CXX)
+endif ()
+
 # --- Installable library + C ABI --------------------------------------------
 # A self-contained library exposing the stable C API (include/rednoise/rednoise.h).
 # glm is compiled in (build-only include) and OpenMP is intentionally not linked,
@@ -191,10 +205,9 @@ if (BUILD_APP)
     else ()
         find_package(SDL3 REQUIRED CONFIG)
     endif ()
-    add_executable(RedNoise src/RedNoise.cpp framework/DrawingWindow.cpp ${ENGINE_SOURCES})
+    add_executable(RedNoise src/RedNoise.cpp framework/DrawingWindow.cpp)
     target_include_directories(RedNoise PRIVATE framework src)
-    target_link_libraries(RedNoise PRIVATE SDL3::SDL3 glm_headers)
-    link_openmp(RedNoise)
+    target_link_libraries(RedNoise PRIVATE SDL3::SDL3 rn_engine)
     # Put the SDL3 runtime library next to the exe so it runs out of the box.
     # (A system package usually deploys it; a from-source fetch does not.)
     if (WIN32)
@@ -212,36 +225,28 @@ endif ()
 
 # --- Headless PPM renderer (no SDL3) ----------------------------------------
 if (BUILD_HEADLESS)
-    add_executable(render_headless tools/render_headless.cpp ${ENGINE_SOURCES})
-    target_include_directories(render_headless PRIVATE framework src)
-    target_link_libraries(render_headless PRIVATE glm_headers)
-    link_openmp(render_headless)
+    add_executable(render_headless tools/render_headless.cpp)
+    target_link_libraries(render_headless PRIVATE rn_engine)
 
-    # Fractal-terrain generator (only needs the noise module).
+    # Fractal-terrain generator (only needs the noise module, not the whole engine).
     add_executable(gen_terrain tools/gen_terrain.cpp src/Noise.cpp)
     target_include_directories(gen_terrain PRIVATE src)
     target_link_libraries(gen_terrain PRIVATE glm_headers)
 
     # Orbiting-camera animation to a PPM frame sequence.
-    add_executable(animate tools/animate.cpp ${ENGINE_SOURCES})
-    target_include_directories(animate PRIVATE framework src)
-    target_link_libraries(animate PRIVATE glm_headers)
-    link_openmp(animate)
+    add_executable(animate tools/animate.cpp)
+    target_link_libraries(animate PRIVATE rn_engine)
 
     # Animated Gerstner-wave ocean to a PPM frame sequence.
-    add_executable(render_ocean tools/render_ocean.cpp ${ENGINE_SOURCES})
-    target_include_directories(render_ocean PRIVATE framework src)
-    target_link_libraries(render_ocean PRIVATE glm_headers)
-    link_openmp(render_ocean)
+    add_executable(render_ocean tools/render_ocean.cpp)
+    target_link_libraries(render_ocean PRIVATE rn_engine)
 
     # Unified CLI front-end (render / animate / version). Output binary is `rn`
     # (lowercase, to avoid colliding with the `RedNoise` app on case-insensitive
     # filesystems).
-    add_executable(rednoise_cli tools/cli.cpp ${ENGINE_SOURCES})
+    add_executable(rednoise_cli tools/cli.cpp)
     set_target_properties(rednoise_cli PROPERTIES OUTPUT_NAME rn)
-    target_include_directories(rednoise_cli PRIVATE framework src)
-    target_link_libraries(rednoise_cli PRIVATE glm_headers)
-    link_openmp(rednoise_cli)
+    target_link_libraries(rednoise_cli PRIVATE rn_engine)
 endif ()
 
 # --- GPU path tracer (OpenCL) -----------------------------------------------
@@ -281,10 +286,9 @@ if (BUILD_GPU)
     endif ()
     if (_ocl_ok)
         message(STATUS "gpu_pathtracer: compiling to target OpenCL API ${OPENCL_TARGET_VERSION}")
-        add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp ${ENGINE_SOURCES})
-        target_include_directories(gpu_pathtracer PRIVATE framework src)
+        add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp)
         target_compile_definitions(gpu_pathtracer PRIVATE CL_TARGET_OPENCL_VERSION=${OPENCL_TARGET_VERSION})
-        target_link_libraries(gpu_pathtracer PRIVATE ${_ocl_libs} glm_headers)
+        target_link_libraries(gpu_pathtracer PRIVATE ${_ocl_libs} rn_engine)
     else ()
         message(WARNING "BUILD_GPU=ON but no OpenCL SDK found; skipping gpu_pathtracer. "
                 "Enable FETCH_DEPENDENCIES, or install any vendor's OpenCL SDK.")
@@ -294,9 +298,7 @@ endif ()
 # --- Unit tests (no SDL3) ---------------------------------------------------
 if (BUILD_TESTS)
     enable_testing()
-    add_executable(rednoise_tests tests/tests.cpp ${ENGINE_SOURCES})
-    target_include_directories(rednoise_tests PRIVATE framework src)
-    target_link_libraries(rednoise_tests PRIVATE glm_headers)
-    link_openmp(rednoise_tests)
+    add_executable(rednoise_tests tests/tests.cpp)
+    target_link_libraries(rednoise_tests PRIVATE rn_engine)
     add_test(NAME unit COMMAND rednoise_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif ()
