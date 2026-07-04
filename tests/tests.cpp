@@ -355,9 +355,9 @@ static void testDeepScanModules() {
 
 	// Sky: overhead is bluer than the sun direction (Rayleigh scattering).
 	glm::vec3 sun = glm::normalize(glm::vec3(0.0f, 0.3f, -1.0f));
-	glm::vec3 up = skyColour(glm::vec3(0, 1, 0), sun), atSun = skyColour(sun, sun);
-	CHECK(up.b > up.r);                     // blue sky overhead
-	CHECK(atSun.r + atSun.g > up.r + up.g); // the sun region is much brighter/warmer
+	glm::vec3 skyUp = skyColour(glm::vec3(0, 1, 0), sun), atSun = skyColour(sun, sun);
+	CHECK(skyUp.b > skyUp.r);                     // blue sky overhead
+	CHECK(atSun.r + atSun.g > skyUp.r + skyUp.g); // the sun region is much brighter/warmer
 }
 
 int main() {
