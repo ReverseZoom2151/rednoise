@@ -51,3 +51,15 @@ wheel.packages = ["rednoise"]
 # independent. Tag it py3-none-<platform> so ONE wheel per OS serves all of
 # Python 3 (and the build runs once per OS instead of once per version).
 wheel.py-api = "py3"
+
+# cibuildwheel configuration (read from this file when building wheels). Build one
+# wheel per OS for CPython 3.12 (the lib is py-version independent, tagged py3),
+# and use manylinux_2_34 on Linux - its default toolchain is GCC 14, which the
+# C++23 engine needs (the older manylinux images ship GCC 10-12).
+[tool.cibuildwheel]
+build = "cp312-*"
+skip = "*musllinux*"
+
+[tool.cibuildwheel.linux]
+manylinux-x86-64-image = "manylinux_2_34"
+manylinux-aarch64-image = "manylinux_2_34"
