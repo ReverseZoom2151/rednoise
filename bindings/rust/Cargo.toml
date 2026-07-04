@@ -1,0 +1,19 @@
+[package]
+name = "rednoise"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Safe Rust bindings for the RedNoise CPU software renderer (wireframe, rasteriser, ray tracer, path tracer)."
+repository = "https://github.com/ReverseZoom2151/rednoise"
+readme = "README.md"
+keywords = ["graphics", "rendering", "ray-tracing", "raytracing", "renderer"]
+categories = ["graphics", "rendering", "external-ffi-bindings"]
+# Declares that this crate links the native `rednoise` library. Cargo enforces
+# that at most one crate in the graph claims this name, and lets build.rs
+# metadata flow to dependents.
+links = "rednoise"
+build = "build.rs"
+
+[[example]]
+name = "render"
+path = "examples/render.rs"
