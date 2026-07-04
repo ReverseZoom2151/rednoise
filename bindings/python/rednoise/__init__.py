@@ -108,9 +108,35 @@ def _candidate_paths() -> list:
     return candidates
 
 
+def _bundled_library_path() -> Optional[str]:
+    """Return the path to the library bundled inside this package, if present.
+
+    A pip-installed wheel ships the native library right next to this module
+    (installed there by the scikit-build-core / CMake build). Look for it first
+    so an installed package is self-contained and needs no environment setup.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    names = [
+        "librednoise.so",
+        "rednoise.dll",
+        "librednoise.dylib",
+        "librednoise.dll",
+    ]
+    for name in names:
+        path = os.path.join(here, name)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 def _find_library_path() -> Optional[str]:
     """Locate the shared library path, or return ``None`` if not found."""
-    # 1. Explicit override via environment variable.
+    # 1. The library bundled next to this package (pip-installed wheel).
+    bundled = _bundled_library_path()
+    if bundled:
+        return bundled
+
+    # 2. Explicit override via environment variable.
     env = os.environ.get("REDNOISE_LIBRARY")
     if env:
         if os.path.isfile(env):
@@ -119,12 +145,12 @@ def _find_library_path() -> Optional[str]:
             f"REDNOISE_LIBRARY is set to {env!r} but that file does not exist."
         )
 
-    # 2. System search path.
+    # 3. System search path.
     found = ctypes.util.find_library("rednoise")
     if found:
         return found
 
-    # 3. Common local build locations.
+    # 4. Common local build locations.
     for path in _candidate_paths():
         if os.path.isfile(path):
             return path

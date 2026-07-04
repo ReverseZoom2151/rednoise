@@ -1,18 +1,19 @@
 # Packaging metadata for the RedNoise Python bindings.
 #
-# NOTE: This package does NOT bundle the RedNoise shared library. The library
-# (librednoise.so / librednoise.dylib / rednoise.dll) is built separately from
-# the C++ project (cmake -DBUILD_LIB=ON) and located at runtime via the
-# REDNOISE_LIBRARY environment variable or common local build paths.
+# This package builds and bundles the RedNoise shared library. scikit-build-core
+# drives CMake to compile the installable `rednoise` library (C ABI) from the
+# parent C++ project and installs the resulting .so / .dll / .dylib into the
+# importable `rednoise/` package directory. Prebuilt wheels ship the library;
+# building from an sdist requires a C++23-capable compiler and CMake >= 3.24.
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["scikit-build-core>=0.8"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "rednoise"
 version = "0.1.0"
-description = "Pure-Python ctypes bindings for the RedNoise CPU software renderer."
+description = "Python ctypes bindings for the RedNoise CPU software renderer, with the native library bundled."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
@@ -41,5 +42,7 @@ Homepage = "https://github.com/ReverseZoom2151/rednoise"
 Repository = "https://github.com/ReverseZoom2151/rednoise"
 Issues = "https://github.com/ReverseZoom2151/rednoise/issues"
 
-[tool.hatch.build.targets.wheel]
-packages = ["rednoise"]
+[tool.scikit-build]
+minimum-version = "0.8"
+cmake.version = ">=3.24"
+wheel.packages = ["rednoise"]

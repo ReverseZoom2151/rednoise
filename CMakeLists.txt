@@ -157,7 +157,11 @@ if (BUILD_LIB)
             PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
             PRIVATE framework src "${RN_GLM_INCLUDE}")
-    set_target_properties(rednoise PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+    set_target_properties(rednoise PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR}
+            POSITION_INDEPENDENT_CODE ON
+            # When built shared (e.g. BUILD_SHARED_LIBS=ON for the language
+            # bindings) export the C ABI from the DLL so ctypes/dlopen can find it.
+            WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
