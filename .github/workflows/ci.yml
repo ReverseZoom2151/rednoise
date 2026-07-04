@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          clang-format --version
+          find framework src tests \( -name '*.cpp' -o -name '*.h' \) -print0 \
+            | xargs -0 clang-format --dry-run --Werror
+
+  tests:
+    name: unit tests (no SDL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake clang
+      - name: Configure (tests only)
+        run: cmake -B build -S . -DBUILD_APP=OFF -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build tests
+        run: cmake --build build --target rednoise_tests
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+  app-syntax:
+    name: app compile check (SDL3 headers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Fetch SDL3 headers
+        run: git clone --depth 1 https://github.com/libsdl-org/SDL.git /tmp/SDL
+      - name: Syntax-check the application against SDL3
+        run: |
+          for f in src/*.cpp framework/*.cpp; do
+            echo "checking $f"
+            clang++ -std=c++17 -fsyntax-only -Wall -Wextra -Wno-unused-parameter \
+              -Iframework -Ithird_party -Isrc -I/tmp/SDL/include "$f"
+          done
