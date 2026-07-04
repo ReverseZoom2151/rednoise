@@ -3,7 +3,7 @@
 # Generate a build:
 #   cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 # Compile:
-#   cmake --build build --target RedNoise --config Release
+#   cmake --build build --config Release
 # Run (from the repo root, so that assets/ resolves):
 #   ./build/RedNoise            # or build/Release/RedNoise.exe on MSVC
 #
@@ -18,36 +18,23 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(SDL3 REQUIRED CONFIG)
 
-# The "sdw" teaching framework (headers + implementations co-located).
+# The application (src/) and the "sdw" teaching framework (framework/).
 file(GLOB FRAMEWORK_SOURCES CONFIGURE_DEPENDS framework/*.cpp)
+file(GLOB APP_SOURCES CONFIGURE_DEPENDS src/*.cpp)
 
-add_executable(RedNoise
-        src/RedNoise.cpp
-        ${FRAMEWORK_SOURCES})
-
-target_include_directories(RedNoise PRIVATE
-        framework
-        third_party)
+add_executable(RedNoise ${APP_SOURCES} ${FRAMEWORK_SOURCES})
+target_include_directories(RedNoise PRIVATE framework third_party src)
 
 if (MSVC)
     target_compile_options(RedNoise PRIVATE /W3 /Zc:wchar_t)
-    set(DEBUG_OPTIONS /MTd)
-    set(RELEASE_OPTIONS /MT /GF /Gy /O2 /fp:fast)
 else ()
     target_compile_options(RedNoise PRIVATE
-            -Wall
-            -Wextra
-            -Wcast-align
-            -Werror=return-type
-            -Wno-unused-parameter
-            -Wno-unused-variable
-            -Wno-ignored-attributes)
-    set(DEBUG_OPTIONS -O2 -fno-omit-frame-pointer -g)
-    set(RELEASE_OPTIONS -O3 -march=native -mtune=native)
-endif()
-
-target_compile_options(RedNoise PRIVATE "$<$<CONFIG:RelWithDebInfo>:${RELEASE_OPTIONS}>")
-target_compile_options(RedNoise PRIVATE "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
-target_compile_options(RedNoise PRIVATE "$<$<CONFIG:Debug>:${DEBUG_OPTIONS}>")
+            -Wall -Wextra -Wcast-align -Werror=return-type
+            -Wno-unused-parameter -Wno-unused-variable -Wno-ignored-attributes)
+    target_compile_options(RedNoise PRIVATE
+            "$<$<CONFIG:Release>:-O3;-march=native;-mtune=native>"
+            "$<$<CONFIG:RelWithDebInfo>:-O3;-march=native;-mtune=native>"
+            "$<$<CONFIG:Debug>:-O2;-fno-omit-frame-pointer;-g>")
+endif ()
 
 target_link_libraries(RedNoise PRIVATE SDL3::SDL3)

@@ -3,7 +3,7 @@ BUILD_DIR    := build
 EXECUTABLE   := $(BUILD_DIR)/$(PROJECT_NAME)
 
 # All translation units: the app and the framework (glm 1.0.1 is header-only).
-SOURCE_FILES := src/RedNoise.cpp $(wildcard framework/*.cpp)
+SOURCE_FILES := $(wildcard src/*.cpp) $(wildcard framework/*.cpp)
 
 # Build settings
 COMPILER         := clang++
