@@ -86,6 +86,12 @@ void handleEvent(SDL_Event event) {
 		case SDLK_DOWN:
 			camera.rotateX(0.05f);
 			break;
+		case SDLK_Z:
+			camera.rotateZ(-0.05f); // roll left
+			break;
+		case SDLK_X:
+			camera.rotateZ(0.05f); // roll right
+			break;
 		// Camera actions.
 		case SDLK_L:
 			camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));

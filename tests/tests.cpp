@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "Geometry.h"
 #include "Interpolation.h"
+#include "Materials.h"
 #include "ObjLoader.h"
 #include "Transform.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -178,7 +179,22 @@ static void testTransform() {
 	CHECK(selectLOD(9.0f, 5.0f, hi, lo).size() == 0);
 }
 
+static void testMaterialsAndRoll() {
+	CHECK(materialPreset("gold").material == Material::Metal);
+	CHECK(materialPreset("chrome").material == Material::Metal);
+	CHECK(materialPreset("ruby").material == Material::Diffuse);
+	CHECK(materialPreset("does-not-exist").material == Material::Diffuse); // neutral fallback
+	// Roll changes the right vector but keeps the basis unit-length.
+	Camera cam(100, 100, 2.0f, glm::vec3(0, 0, 4));
+	cam.lookAt(glm::vec3(0));
+	glm::mat3 before = cam.orientation;
+	cam.rotateZ(0.3f);
+	CHECK(glm::length(cam.orientation[0] - before[0]) > 0.01f);
+	CHECK(nearly(glm::length(cam.orientation[0]), 1.0f));
+}
+
 int main() {
+	testMaterialsAndRoll();
 	testTransform();
 	testInterpolateSingleFloats();
 	testInterpolateThreeElementValues();

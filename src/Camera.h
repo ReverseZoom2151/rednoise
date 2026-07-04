@@ -40,5 +40,6 @@ public:
 	void translate(const glm::vec3 &delta);
 	void rotateX(float radians); // pitch
 	void rotateY(float radians); // yaw
+	void rotateZ(float radians); // roll
 	void orbitY(float radians, const glm::vec3 &target);
 };

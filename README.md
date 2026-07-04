@@ -117,6 +117,7 @@ ctest --test-dir build --output-on-failure          # unit tests
 | `4` / `5` / `6` | Flat / Gouraud / Phong shading (ray tracer) |
 | `W` `A` `S` `D` `Q` `E` | Move the camera |
 | Arrow keys, or left-drag | Rotate the camera (pan / tilt) |
+| `Z` / `X` | Roll the camera (tilt the horizon) |
 | `L` / `O` / `R` | Aim at the scene centre / toggle orbit / reset |
 | `C` | Toggle backface culling (rasteriser) |
 | `P` | Save the frame to `output.ppm` |

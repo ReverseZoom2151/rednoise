@@ -55,6 +55,7 @@ set(ENGINE_SOURCES
         src/Transform.cpp
         src/Scene.cpp
         src/Photon.cpp
+        src/Materials.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

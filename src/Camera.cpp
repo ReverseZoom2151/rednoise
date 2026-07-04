@@ -50,6 +50,14 @@ void Camera::rotateY(float radians) {
 	orientation = orientation * rot;
 }
 
+// Roll: rotate about the local forward (z) axis, tilting the horizon.
+void Camera::rotateZ(float radians) {
+	float c = std::cos(radians);
+	float s = std::sin(radians);
+	glm::mat3 rot(c, s, 0.0f, -s, c, 0.0f, 0.0f, 0.0f, 1.0f);
+	orientation = orientation * rot;
+}
+
 void Camera::orbitY(float radians, const glm::vec3 &target) {
 	float c = std::cos(radians);
 	float s = std::sin(radians);
