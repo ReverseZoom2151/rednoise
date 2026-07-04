@@ -27,9 +27,12 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 
 // Monte-Carlo path tracer: `samples` jittered paths per pixel give global
 // illumination (colour bleeding), soft shadows, and anti-aliasing together.
-// aperture > 0 enables depth of field focused at `focusDistance`.
+// aperture > 0 enables depth of field focused at `focusDistance`; a non-zero
+// cameraMotion adds motion blur along that vector.
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples = 32,
-                      const std::vector<Light> &lights = {}, float aperture = 0.0f, float focusDistance = 4.0f);
+                      const std::vector<Light> &lights = {}, float aperture = 0.0f, float focusDistance = 4.0f,
+                      const glm::vec3 &cameraMotion = glm::vec3(0.0f));
 
-// Post-filter: Reinhard tone-map + gamma correction over a rendered canvas.
+// Post-filters over a rendered canvas.
 void toneMap(Canvas &canvas, float exposure = 1.0f, float gamma = 2.2f);
+void applyFXAA(Canvas &canvas);

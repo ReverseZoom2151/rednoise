@@ -466,7 +466,8 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 }
 
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
-                      const std::vector<Light> &lights, float aperture, float focusDistance) {
+                      const std::vector<Light> &lights, float aperture, float focusDistance,
+                      const glm::vec3 &cameraMotion) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -493,15 +494,17 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 				float jx = jitter(rng), jy = jitter(rng);
 				glm::vec3 dirCamera((x + 0.5f + jx - W / 2.0f) / f, -(y + 0.5f + jy - H / 2.0f) / f, -1.0f);
 				glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-				glm::vec3 origin = camera.position;
+				// Motion blur: jitter the camera along its motion vector over the shutter.
+				glm::vec3 camPos = camera.position + cameraMotion * U(rng);
+				glm::vec3 origin = camPos;
 				// Depth of field: sample a lens disk and re-aim at the focal point.
 				if (aperture > 0.0f) {
-					glm::vec3 focalPoint = camera.position + direction * focusDistance;
+					glm::vec3 focalPoint = camPos + direction * focusDistance;
 					float ang = 2.0f * 3.14159265f * U(rng);
 					float rad = aperture * std::sqrt(U(rng));
 					glm::vec3 right = camera.orientation[0];
 					glm::vec3 up = camera.orientation[1];
-					origin = camera.position + (right * std::cos(ang) + up * std::sin(ang)) * rad;
+					origin = camPos + (right * std::cos(ang) + up * std::sin(ang)) * rad;
 					direction = glm::normalize(focalPoint - origin);
 				}
 				sum += pathTrace(origin, direction, bvh, used, maxDepth, rng);
@@ -528,5 +531,37 @@ void toneMap(Canvas &canvas, float exposure, float gamma) {
 		int g = std::min(255, static_cast<int>(c.g));
 		int b = std::min(255, static_cast<int>(c.b));
 		pixel = (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+	}
+}
+
+// A lightweight FXAA: blur pixels along high-contrast luma edges to soften
+// jaggies without a full extra render pass.
+void applyFXAA(Canvas &canvas) {
+	const float edgeThreshold = 0.12f;
+	std::vector<uint32_t> src = canvas.pixels;
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	auto at = [&](int x, int y) {
+		uint32_t p = src[static_cast<size_t>(y) * W + x];
+		return glm::vec3((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+	};
+	auto luma = [](const glm::vec3 &c) { return (0.299f * c.r + 0.587f * c.g + 0.114f * c.b) / 255.0f; };
+	for (int y = 1; y < H - 1; y++) {
+		for (int x = 1; x < W - 1; x++) {
+			float lC = luma(at(x, y));
+			float lN = luma(at(x, y - 1)), lS = luma(at(x, y + 1));
+			float lW = luma(at(x - 1, y)), lE = luma(at(x + 1, y));
+			float contrast = std::max({lC, lN, lS, lW, lE}) - std::min({lC, lN, lS, lW, lE});
+			if (contrast < edgeThreshold)
+				continue;
+			glm::vec3 avg = (at(x, y - 1) + at(x, y + 1) + at(x - 1, y) + at(x + 1, y)) * 0.25f;
+			float blend = std::min(0.5f, (contrast - edgeThreshold) * 2.0f);
+			glm::vec3 c = glm::mix(at(x, y), avg, blend);
+			int r = std::min(255, static_cast<int>(c.r));
+			int g = std::min(255, static_cast<int>(c.g));
+			int b = std::min(255, static_cast<int>(c.b));
+			canvas.pixels[static_cast<size_t>(y) * W + x] =
+			    (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+		}
 	}
 }
