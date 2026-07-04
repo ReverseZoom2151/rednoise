@@ -1,0 +1,7 @@
+newmtl Textured
+Kd 1.000000 1.000000 1.000000
+map_Kd texture.ppm
+
+newmtl Parallax
+Kd 1.000000 1.000000 1.000000
+map_Kd texture.ppm

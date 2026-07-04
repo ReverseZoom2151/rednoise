@@ -1,18 +1,27 @@
 #include "ObjLoader.h"
 
 #include <Colour.h>
+#include <TextureMap.h>
 #include <cmath>
 #include <fstream>
 #include <glm/glm.hpp>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
-// Parse a Wavefront .mtl file into a name -> diffuse-colour map.
-static std::map<std::string, Colour> loadMTL(const std::string &filename) {
-	std::map<std::string, Colour> materials;
+namespace {
+struct MaterialDef {
+	Colour colour;
+	std::string mapKd; // texture filename, empty if none
+};
+} // namespace
+
+// Parse a Wavefront .mtl file into a name -> material map.
+static std::map<std::string, MaterialDef> loadMTL(const std::string &filename) {
+	std::map<std::string, MaterialDef> materials;
 	std::ifstream file(filename);
 	if (!file.is_open()) {
 		std::cout << "Failed to open material file: " << filename << std::endl;
@@ -29,15 +38,16 @@ static std::map<std::string, Colour> loadMTL(const std::string &filename) {
 		} else if (type == "Kd" && !currentName.empty()) {
 			float r, g, b;
 			ss >> r >> g >> b;
-			materials[currentName] =
+			materials[currentName].colour =
 			    Colour(currentName, static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
+		} else if (type == "map_Kd" && !currentName.empty()) {
+			ss >> materials[currentName].mapKd;
 		}
 	}
 	return materials;
 }
 
-// Map a material name to a surface response. Materials literally named "Mirror"
-// or "Glass" become reflective / refractive; everything else is diffuse.
+// Map a material name to a surface response.
 static Material materialFor(const std::string &name) {
 	if (name == "Mirror")
 		return Material::Mirror;
@@ -47,14 +57,35 @@ static Material materialFor(const std::string &name) {
 		return Material::Procedural;
 	if (name == "Bumpy")
 		return Material::Bump;
+	if (name == "Parallax")
+		return Material::Parallax;
 	return Material::Diffuse;
+}
+
+// Parse one face token ("v", "v/vt", "v/vt/vn", "v//vn") into 0-based indices.
+static void parseFaceToken(const std::string &token, int &v, int &vt) {
+	v = -1;
+	vt = -1;
+	size_t firstSlash = token.find('/');
+	if (firstSlash == std::string::npos) {
+		v = std::stoi(token) - 1;
+		return;
+	}
+	v = std::stoi(token.substr(0, firstSlash)) - 1;
+	size_t secondSlash = token.find('/', firstSlash + 1);
+	std::string vtStr = (secondSlash == std::string::npos) ? token.substr(firstSlash + 1)
+	                                                       : token.substr(firstSlash + 1, secondSlash - firstSlash - 1);
+	if (!vtStr.empty())
+		vt = std::stoi(vtStr) - 1;
 }
 
 namespace {
 struct Face {
-	int a, b, c;
+	int a, b, c;    // vertex indices
+	int ta, tb, tc; // texture-coord indices (-1 if none)
 	Colour colour;
 	Material material;
+	std::shared_ptr<TextureMap> texture;
 };
 } // namespace
 
@@ -65,17 +96,19 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 		std::cout << "Failed to open file: " << filename << std::endl;
 		return triangles;
 	}
-	// Directory containing the .obj, so a relative mtllib path resolves correctly.
 	std::string directory;
 	size_t slash = filename.find_last_of("/\\");
 	if (slash != std::string::npos)
 		directory = filename.substr(0, slash + 1);
 
-	std::map<std::string, Colour> materials;
+	std::map<std::string, MaterialDef> materials;
+	std::map<std::string, std::shared_ptr<TextureMap>> textureCache;
 	std::vector<glm::vec3> vertices;
+	std::vector<glm::vec2> texCoords;
 	std::vector<Face> faces;
 	Colour currentColour;
 	Material currentMaterial = Material::Diffuse;
+	std::shared_ptr<TextureMap> currentTexture;
 	std::string line;
 	while (std::getline(file, line)) {
 		std::stringstream ss(line);
@@ -88,22 +121,38 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 		} else if (type == "usemtl") {
 			std::string mtlName;
 			ss >> mtlName;
-			auto it = materials.find(mtlName);
-			if (it != materials.end())
-				currentColour = it->second;
 			currentMaterial = materialFor(mtlName);
+			currentTexture = nullptr;
+			auto it = materials.find(mtlName);
+			if (it != materials.end()) {
+				currentColour = it->second.colour;
+				if (!it->second.mapKd.empty()) {
+					std::string path = directory + it->second.mapKd;
+					auto cached = textureCache.find(path);
+					if (cached == textureCache.end()) {
+						currentTexture = std::make_shared<TextureMap>(path);
+						textureCache[path] = currentTexture;
+					} else {
+						currentTexture = cached->second;
+					}
+				}
+			}
 		} else if (type == "v") {
 			float x, y, z;
 			ss >> x >> y >> z;
 			vertices.push_back(glm::vec3(x * scale, y * scale, z * scale));
+		} else if (type == "vt") {
+			float u, v;
+			ss >> u >> v;
+			texCoords.push_back(glm::vec2(u, v));
 		} else if (type == "f") {
-			std::string v1, v2, v3;
-			ss >> v1 >> v2 >> v3;
-			// Face tokens look like "2/", "2/3/", or "2/3/4"; stoi stops at the slash.
-			int i1 = std::stoi(v1) - 1;
-			int i2 = std::stoi(v2) - 1;
-			int i3 = std::stoi(v3) - 1;
-			faces.push_back({i1, i2, i3, currentColour, currentMaterial});
+			std::string t1, t2, t3;
+			ss >> t1 >> t2 >> t3;
+			int a, b, c, ta, tb, tc;
+			parseFaceToken(t1, a, ta);
+			parseFaceToken(t2, b, tb);
+			parseFaceToken(t3, c, tc);
+			faces.push_back({a, b, c, ta, tb, tc, currentColour, currentMaterial, currentTexture});
 		}
 	}
 
@@ -124,9 +173,8 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 		vertexFaces[faces[i].c].push_back(static_cast<int>(i));
 	}
 
-	// Smooth a vertex normal by averaging only the adjacent face normals that lie
-	// within ~60 degrees of this face, so hard edges (e.g. the box corners) stay
-	// crisp while genuinely curved surfaces are smoothed.
+	// Smooth a vertex normal by averaging only the adjacent face normals within
+	// ~60 degrees, so hard edges stay crisp while curved surfaces are smoothed.
 	const float threshold = 0.5f;
 	auto smoothNormal = [&](int vertexIndex, size_t faceIndex) {
 		glm::vec3 sum(0.0f);
@@ -144,6 +192,12 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 		triangle.material = f.material;
 		triangle.normal = faceNormals[i];
 		triangle.vertexNormals = {smoothNormal(f.a, i), smoothNormal(f.b, i), smoothNormal(f.c, i)};
+		if (f.ta >= 0 && f.tb >= 0 && f.tc >= 0) {
+			triangle.texturePoints = {TexturePoint(texCoords[f.ta].x, texCoords[f.ta].y),
+			                          TexturePoint(texCoords[f.tb].x, texCoords[f.tb].y),
+			                          TexturePoint(texCoords[f.tc].x, texCoords[f.tc].y)};
+			triangle.texture = f.texture;
+		}
 		triangles.push_back(triangle);
 	}
 	return triangles;

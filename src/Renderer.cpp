@@ -137,6 +137,37 @@ static glm::vec3 bumpNormal(const glm::vec3 &normal, const glm::vec3 &p) {
 	return glm::normalize(normal + 2.0f * gradient);
 }
 
+// Nearest-neighbour texel lookup at normalised (u, v); v is flipped for image origin.
+static glm::vec3 sampleTexture(const TextureMap &tex, float u, float v) {
+	int tw = static_cast<int>(tex.width);
+	int th = static_cast<int>(tex.height);
+	int tx = std::min(std::max(static_cast<int>(u * (tw - 1)), 0), tw - 1);
+	int ty = std::min(std::max(static_cast<int>((1.0f - v) * (th - 1)), 0), th - 1);
+	uint32_t p = tex.pixels[static_cast<size_t>(ty) * tw + tx];
+	return glm::vec3((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+}
+
+// Offset a texture coordinate along the view direction (in the triangle's tangent
+// frame) by a height read from the texture, giving simple parallax mapping.
+static glm::vec2 parallaxUV(const ModelTriangle &tri, glm::vec2 uv, const glm::vec3 &viewDir) {
+	glm::vec3 e1 = tri.vertices[1] - tri.vertices[0];
+	glm::vec3 e2 = tri.vertices[2] - tri.vertices[0];
+	glm::vec2 d1(tri.texturePoints[1].x - tri.texturePoints[0].x, tri.texturePoints[1].y - tri.texturePoints[0].y);
+	glm::vec2 d2(tri.texturePoints[2].x - tri.texturePoints[0].x, tri.texturePoints[2].y - tri.texturePoints[0].y);
+	float det = d1.x * d2.y - d2.x * d1.y;
+	if (std::abs(det) < 1e-8f)
+		return uv;
+	float f = 1.0f / det;
+	glm::vec3 T = glm::normalize(f * (d2.y * e1 - d1.y * e2));
+	glm::vec3 B = glm::normalize(f * (-d2.x * e1 + d1.x * e2));
+	glm::vec3 vTS(glm::dot(viewDir, T), glm::dot(viewDir, B), glm::dot(viewDir, tri.normal));
+	if (std::abs(vTS.z) < 1e-4f)
+		return uv;
+	float height = sampleTexture(*tri.texture, uv.x, uv.y).x / 255.0f; // red channel as height
+	glm::vec2 offset = glm::vec2(vTS.x, vTS.y) / vTS.z * (height * 0.05f);
+	return uv - offset;
+}
+
 static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
                               const std::vector<ModelTriangle> &model, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -177,9 +208,21 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 		shade = lightPoint(point, normal, viewDir, light, inShadow);
 	}
 
-	glm::vec3 base = (tri.material == Material::Procedural)
-	                     ? proceduralColour(point)
-	                     : glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue);
+	glm::vec3 base;
+	if (tri.texture) {
+		float tu = w0 * tri.texturePoints[0].x + w1 * tri.texturePoints[1].x + w2 * tri.texturePoints[2].x;
+		float tv = w0 * tri.texturePoints[0].y + w1 * tri.texturePoints[1].y + w2 * tri.texturePoints[2].y;
+		if (tri.material == Material::Parallax) {
+			glm::vec2 uv = parallaxUV(tri, glm::vec2(tu, tv), viewDir);
+			tu = uv.x;
+			tv = uv.y;
+		}
+		base = sampleTexture(*tri.texture, tu, tv);
+	} else if (tri.material == Material::Procedural) {
+		base = proceduralColour(point);
+	} else {
+		base = glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue);
+	}
 	return base * shade.brightness + glm::vec3(255.0f) * shade.specular;
 }
 
