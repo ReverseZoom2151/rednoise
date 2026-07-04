@@ -5,9 +5,20 @@
 #include "Camera.h"
 #include "Geometry.h"
 #include "Interpolation.h"
+#include "Clouds.h"
+#include "ColourUtil.h"
+#include "KdTree.h"
+#include "Lines.h"
 #include "Materials.h"
+#include "Meshing.h"
+#include "Nurbs.h"
 #include "ObjLoader.h"
+#include "Octree.h"
+#include "OceanFFT.h"
+#include "SceneGraph.h"
 #include "Transform.h"
+#include "Voxel.h"
+#include <Canvas.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <Utils.h>
 #include <cmath>
@@ -193,7 +204,71 @@ static void testMaterialsAndRoll() {
 	CHECK(nearly(glm::length(cam.orientation[0]), 1.0f));
 }
 
+static void testDeepScanModules() {
+	// A small scene of triangles for the acceleration structures.
+	std::vector<ModelTriangle> tris;
+	for (int i = 0; i < 6; i++) {
+		float z = -1.0f - i;
+		tris.push_back(
+		    ModelTriangle(glm::vec3(-1, -1, z), glm::vec3(1, -1, z), glm::vec3(0, 1, z), Colour(200, 100, 50)));
+	}
+	// Octree + KdTree must agree with the trusted BVH on hit + occlusion.
+	BVH bvh(tris);
+	Octree oct(tris);
+	KdTree kd(tris);
+	glm::vec3 o(0.0f, 0.0f, 2.0f), d(0.0f, 0.0f, -1.0f);
+	RayTriangleIntersection hb = bvh.intersect(o, d), ho = oct.intersect(o, d), hk = kd.intersect(o, d);
+	CHECK(hb.hit && ho.hit && hk.hit);
+	CHECK(ho.triangleIndex == hb.triangleIndex && hk.triangleIndex == hb.triangleIndex);
+	CHECK(nearly(ho.distanceFromCamera, hb.distanceFromCamera) && nearly(hk.distanceFromCamera, hb.distanceFromCamera));
+	CHECK(oct.occluded(o, d, 10.0f, -1) == bvh.occluded(o, d, 10.0f, -1));
+	CHECK(kd.occluded(o, d, 10.0f, -1) == bvh.occluded(o, d, 10.0f, -1));
+
+	// Meshing: Delaunay circumcircle predicate + point cloud + decimation.
+	std::vector<glm::vec2> pts = {{0, 0}, {1, 0}, {0, 1}, {1, 1}, {0.5f, 0.5f}, {0.2f, 0.8f}};
+	CHECK(!meshing::delaunayTriangulate(pts).empty());
+	CHECK(meshing::inCircumcircle({0, 0}, {2, 0}, {1, 2}, {1, 0.5f}));
+
+	// NURBS tessellation gives 2*u*v triangles.
+	std::vector<std::vector<glm::vec3>> grid(4, std::vector<glm::vec3>(4));
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++)
+			grid[i][j] = glm::vec3(i, ((i + j) % 2) ? 0.5f : 0.0f, j);
+	std::vector<ModelTriangle> surf = tessellateSplineSurface(grid, 8, 8, Colour(100, 150, 200));
+	CHECK(surf.size() == static_cast<size_t>(2 * 8 * 8));
+	CHECK(meshing::decimate(surf, 0.5f).size() <= surf.size());
+
+	// Scene graph flattens all node meshes.
+	SceneNode root = makeNode(glm::mat4(1.0f), tris);
+	root.children.push_back(makeNode(glm::mat4(1.0f), tris));
+	CHECK(flatten(root).size() == tris.size() * 2);
+
+	// Voxelise a mesh and re-mesh the voxels.
+	CHECK(!voxelsToMesh(voxelize(surf, 12)).empty());
+
+	// Spectral ocean generates a non-empty animated mesh.
+	CHECK(!generateOceanFFT(16, 4.0f, 0.0f).empty());
+
+	// Cloud density is a normalised field.
+	float cd = cloudDensity(glm::vec3(0.3f, 2.0f, 0.5f), 0.0f);
+	CHECK(cd >= 0.0f && cd <= 1.0f);
+
+	// HSV round-trips back to RGB.
+	glm::vec3 rgb(0.3f, 0.7f, 0.2f);
+	glm::vec3 back = hsvToRgb(rgbToHsv(rgb));
+	CHECK(std::abs(back.r - rgb.r) < 0.01f && std::abs(back.g - rgb.g) < 0.01f && std::abs(back.b - rgb.b) < 0.01f);
+
+	// Line drawing sets pixels; Cohen-Sutherland clips a crossing line.
+	Canvas canvas(32, 32);
+	bresenhamLine(canvas, 2, 2, 20, 20, Colour(255, 255, 255));
+	CHECK(canvas.pixels[11 * 32 + 11] != canvas.pixels[0]);
+	float x0 = -5, y0 = 16, x1 = 40, y1 = 16;
+	CHECK(cohenSutherlandClip(x0, y0, x1, y1, 0, 0, 31, 31));
+	CHECK(x0 >= 0.0f && x1 <= 31.0f);
+}
+
 int main() {
+	testDeepScanModules();
 	testMaterialsAndRoll();
 	testTransform();
 	testInterpolateSingleFloats();

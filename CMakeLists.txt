@@ -108,6 +108,16 @@ set(ENGINE_SOURCES
         src/BDPT.cpp
         src/Metropolis.cpp
         src/Ocean.cpp
+        src/Meshing.cpp
+        src/Octree.cpp
+        src/KdTree.cpp
+        src/Clouds.cpp
+        src/Voxel.cpp
+        src/Nurbs.cpp
+        src/SceneGraph.cpp
+        src/OceanFFT.cpp
+        src/ColourUtil.cpp
+        src/Lines.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
