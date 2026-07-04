@@ -17,6 +17,7 @@
 #include "Materials.h"
 #include "Meshing.h"
 #include "Mipmap.h"
+#include "Noise.h"
 #include "Nurbs.h"
 #include "ObjLoader.h"
 #include "Octree.h"
@@ -370,6 +371,17 @@ static void testDeepScanModules() {
 	CHECK(dh.hit && nearly(dh.distanceFromCamera, 2.0f));
 	RayTriangleIntersection dm = diskScene.intersect(glm::vec3(1.0f, 0, 0), glm::vec3(0, 0, -1)); // 1 unit off, r=0.5
 	CHECK(!dm.hit);
+
+	// Perlin analytical derivatives: the returned gradient matches a finite
+	// difference of the value, at several points.
+	for (glm::vec3 p : {glm::vec3(1.3f, 2.7f, 0.4f), glm::vec3(-0.6f, 5.1f, 3.2f)}) {
+		glm::vec4 nd = perlinNoiseD(p);
+		float e = 1e-3f;
+		float dx = (perlinNoiseD(p + glm::vec3(e, 0, 0)).x - perlinNoiseD(p - glm::vec3(e, 0, 0)).x) / (2 * e);
+		float dz = (perlinNoiseD(p + glm::vec3(0, 0, e)).x - perlinNoiseD(p - glm::vec3(0, 0, e)).x) / (2 * e);
+		CHECK(std::abs(nd.y - dx) < 1e-2f); // analytic d/dx
+		CHECK(std::abs(nd.w - dz) < 1e-2f); // analytic d/dz
+	}
 }
 
 int main() {
