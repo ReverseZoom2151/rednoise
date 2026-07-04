@@ -5,37 +5,32 @@
 DrawingWindow::DrawingWindow() {}
 
 DrawingWindow::DrawingWindow(int w, int h, bool fullscreen) : width(w), height(h), pixelBuffer(w * h) {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) printMessageAndQuit("Could not initialise SDL: ", SDL_GetError());
-	uint32_t flags = SDL_WINDOW_OPENGL;
-	if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-	int ANYWHERE = SDL_WINDOWPOS_UNDEFINED;
-	window = SDL_CreateWindow("COMS30020", ANYWHERE, ANYWHERE, width, height, flags);
+	if (!SDL_Init(SDL_INIT_VIDEO)) printMessageAndQuit("Could not initialise SDL: ", SDL_GetError());
+	SDL_WindowFlags flags = SDL_WINDOW_OPENGL;
+	if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
+	window = SDL_CreateWindow("COMS30020", width, height, flags);
 	if (!window) printMessageAndQuit("Could not set video mode: ", SDL_GetError());
-	// Set rendering to software (hardware acceleration doesn't work on all platforms)
-	flags = SDL_RENDERER_SOFTWARE;
-	// You could try hardware acceleration if you like - by uncommenting the below line
-	// flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
-	renderer = SDL_CreateRenderer(window, -1, flags);
+	// Use the software renderer (hardware acceleration doesn't work on all platforms).
+	renderer = SDL_CreateRenderer(window, SDL_SOFTWARE_RENDERER);
 	if (!renderer) printMessageAndQuit("Could not create renderer: ", SDL_GetError());
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-	SDL_RenderSetLogicalSize(renderer, width, height);
-	int PIXELFORMAT = SDL_PIXELFORMAT_ARGB8888;
-	texture = SDL_CreateTexture(renderer, PIXELFORMAT, SDL_TEXTUREACCESS_STATIC, width, height);
+	SDL_SetRenderLogicalPresentation(renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, width, height);
 	if (!texture) printMessageAndQuit("Could not allocate texture: ", SDL_GetError());
+	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
 }
 
 void DrawingWindow::renderFrame() {
 	SDL_UpdateTexture(texture, nullptr, pixelBuffer.data(), width * sizeof(uint32_t));
 	SDL_RenderClear(renderer);
-	SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+	SDL_RenderTexture(renderer, texture, nullptr, nullptr);
 	SDL_RenderPresent(renderer);
 }
 
 void DrawingWindow::saveBMP(const std::string &filename) const {
-	auto surface = SDL_CreateRGBSurfaceFrom((void *) pixelBuffer.data(), width, height, 32,
-	                                        width * sizeof(uint32_t),
-	                                        0xFF << 16, 0xFF << 8, 0xFF << 0, 0xFF << 24);
+	SDL_Surface *surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_ARGB8888,
+	                                             (void *) pixelBuffer.data(), width * sizeof(uint32_t));
 	SDL_SaveBMP(surface, filename.c_str());
+	SDL_DestroySurface(surface);
 }
 
 void DrawingWindow::savePPM(const std::string &filename) const {
@@ -57,7 +52,7 @@ void DrawingWindow::savePPM(const std::string &filename) const {
 
 bool DrawingWindow::pollForInputEvents(SDL_Event &event) {
 	if (SDL_PollEvent(&event)) {
-		if ((event.type == SDL_QUIT) || ((event.type == SDL_KEYDOWN) && (event.key.keysym.sym == SDLK_ESCAPE))) {
+		if ((event.type == SDL_EVENT_QUIT) || ((event.type == SDL_EVENT_KEY_DOWN) && (event.key.key == SDLK_ESCAPE))) {
 			SDL_DestroyTexture(texture);
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);

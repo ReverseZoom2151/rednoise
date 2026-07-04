@@ -15,9 +15,9 @@ FUSSY_OPTIONS    := -Werror -pedantic
 SANITIZER_OPTS   := -O1 -fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 SPEEDY_OPTIONS   := -Ofast -funsafe-math-optimizations -march=native
 
-# SDL2 flags (falls back gracefully if sdl2-config is on PATH)
-SDL_CFLAGS := $(shell sdl2-config --cflags)
-SDL_LIBS   := $(shell sdl2-config --libs)
+# SDL3 flags via pkg-config (SDL3 installs sdl3.pc)
+SDL_CFLAGS := $(shell pkg-config --cflags sdl3)
+SDL_LIBS   := $(shell pkg-config --libs sdl3)
 
 CXXFLAGS := $(COMPILER_OPTIONS) $(WARNINGS) $(INCLUDES) $(SDL_CFLAGS)
 

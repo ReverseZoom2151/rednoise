@@ -24,8 +24,10 @@ GLM is a header-only mathematics library for graphics software. Only the
 The `DrawingWindow`, `CanvasPoint`, `CanvasTriangle`, `Colour`,
 `ModelTriangle`, `TextureMap`, `TexturePoint`, and `Utils` classes are
 based on the framework distributed with the unit for building a software
-renderer on top of SDL2.
+renderer on top of SDL.
 
-## SDL2
+## SDL3
 
 Linked at build time (not vendored). https://www.libsdl.org — zlib license.
+Resolved via CMake `find_package(SDL3 CONFIG)` / the `SDL3::SDL3` target, or
+`pkg-config sdl3` for the Makefile build.

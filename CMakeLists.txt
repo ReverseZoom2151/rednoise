@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(SDL2 REQUIRED)
+find_package(SDL3 REQUIRED CONFIG)
 
 # The "sdw" teaching framework (headers + implementations co-located).
 file(GLOB FRAMEWORK_SOURCES CONFIGURE_DEPENDS framework/*.cpp)
@@ -27,16 +27,12 @@ add_executable(RedNoise
 
 target_include_directories(RedNoise PRIVATE
         framework
-        third_party
-        ${SDL2_INCLUDE_DIRS})
+        third_party)
 
 if (MSVC)
     target_compile_options(RedNoise PRIVATE /W3 /Zc:wchar_t)
     set(DEBUG_OPTIONS /MTd)
     set(RELEASE_OPTIONS /MT /GF /Gy /O2 /fp:fast)
-    if (NOT DEFINED SDL2_LIBRARIES)
-        set(SDL2_LIBRARIES SDL2::SDL2 SDL2::SDL2main)
-    endif()
 else ()
     target_compile_options(RedNoise PRIVATE
             -Wall
@@ -54,4 +50,4 @@ target_compile_options(RedNoise PRIVATE "$<$<CONFIG:RelWithDebInfo>:${RELEASE_OP
 target_compile_options(RedNoise PRIVATE "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
 target_compile_options(RedNoise PRIVATE "$<$<CONFIG:Debug>:${DEBUG_OPTIONS}>")
 
-target_link_libraries(RedNoise PRIVATE ${SDL2_LIBRARIES})
+target_link_libraries(RedNoise PRIVATE SDL3::SDL3)

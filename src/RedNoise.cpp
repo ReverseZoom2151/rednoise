@@ -423,20 +423,20 @@ void draw(DrawingWindow &window) {
 }
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
-	if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-		if (event.key.keysym.sym == SDLK_LEFT)
+	if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+		if (event.key.key == SDLK_LEFT)
 			std::cout << "LEFT" << std::endl;
-		else if (event.key.keysym.sym == SDLK_RIGHT)
+		else if (event.key.key == SDLK_RIGHT)
 			std::cout << "RIGHT" << std::endl;
-		else if (event.key.keysym.sym == SDLK_UP)
+		else if (event.key.key == SDLK_UP)
 			std::cout << "UP" << std::endl;
-		else if (event.key.keysym.sym == SDLK_DOWN)
+		else if (event.key.key == SDLK_DOWN)
 			std::cout << "DOWN" << std::endl;
-		else if (event.key.keysym.sym == SDLK_u)
+		else if (event.key.key == SDLK_U)
 			drawRandomTriangle(window);
-		else if (event.key.keysym.sym == SDLK_f)
+		else if (event.key.key == SDLK_F)
 			drawRandomFilledTriangle(window);
-	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
+	} else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
 	}
