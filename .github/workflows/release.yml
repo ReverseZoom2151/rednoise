@@ -99,5 +99,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: RedNoise ${{ github.ref_name }}
           files: ${{ env.ASSET }}
           fail_on_unmatched_files: true
+          generate_release_notes: true
