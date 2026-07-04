@@ -7,6 +7,7 @@
 #include "Interpolation.h"
 #include "Clouds.h"
 #include "Bezier.h"
+#include "Drawing.h"
 #include "Blackbody.h"
 #include "IrradianceCache.h"
 #include "QMC.h"
@@ -383,6 +384,12 @@ static void testDeepScanModules() {
 		CHECK(std::abs(nd.y - dx) < 1e-2f); // analytic d/dx
 		CHECK(std::abs(nd.w - dz) < 1e-2f); // analytic d/dz
 	}
+
+	// Perspective-correct interpolation: at the screen midpoint of an edge from
+	// depth 1 (value 0) to depth 3 (value 1), the perspective-correct value is
+	// 0.25, not the affine 0.5.
+	CHECK(nearly(perspectiveInterp(0.5f, 0.5f, 0.0f, 1.0f, 1.0f / 3.0f, 0.0f, 0.0f, 1.0f, 0.0f), 0.25f));
+	CHECK(std::abs(perspectiveInterp(0.5f, 0.5f, 0.0f, 1.0f, 1.0f / 3.0f, 0.0f, 0.0f, 1.0f, 0.0f) - 0.5f) > 0.2f);
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

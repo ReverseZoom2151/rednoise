@@ -27,3 +27,8 @@ void drawRandomFilledTriangle(Canvas &canvas);
 void drawTexturedLine(Canvas &canvas, CanvasPoint from, CanvasPoint to, TextureMap texture);
 void drawTexturedTriangle(Canvas &canvas, CanvasTriangle triangle, TextureMap &map);
 void drawTexturedTriangleExample(Canvas &canvas);
+
+// Perspective-correct attribute interpolation (weight each vertex value by 1/z).
+float perspectiveInterp(float w0, float w1, float w2, float iz0, float iz1, float iz2, float a0, float a1, float a2);
+// Barycentric textured-triangle fill with perspective-correct UVs (uses depth).
+void drawTexturedTrianglePerspective(Canvas &canvas, CanvasTriangle triangle, const TextureMap &map);

@@ -225,6 +225,50 @@ void drawTexturedTriangle(Canvas &canvas, CanvasTriangle triangle, TextureMap &m
 	drawCanvasStrokedTriangle(triangle, Colour(255, 255, 255), canvas);
 }
 
+// Perspective-correct attribute interpolation: weight each vertex attribute by
+// its inverse depth (1/z) so the interpolated value matches linear interpolation
+// in 3D world space rather than in screen space (which warps textures on angled
+// triangles). w0/w1/w2 are the barycentric weights.
+float perspectiveInterp(float w0, float w1, float w2, float iz0, float iz1, float iz2, float a0, float a1, float a2) {
+	float denom = w0 * iz0 + w1 * iz1 + w2 * iz2;
+	if (denom == 0.0f)
+		return a0;
+	return (w0 * a0 * iz0 + w1 * a1 * iz1 + w2 * a2 * iz2) / denom;
+}
+
+// Barycentric textured-triangle fill with perspective-correct UVs. Each vertex's
+// CanvasPoint carries a positive `depth`; UVs are interpolated via 1/depth.
+void drawTexturedTrianglePerspective(Canvas &canvas, CanvasTriangle triangle, const TextureMap &map) {
+	const CanvasPoint &a = triangle.v0(), &b = triangle.v1(), &c = triangle.v2();
+	float iz0 = a.depth > 1e-6f ? 1.0f / a.depth : 1.0f;
+	float iz1 = b.depth > 1e-6f ? 1.0f / b.depth : 1.0f;
+	float iz2 = c.depth > 1e-6f ? 1.0f / c.depth : 1.0f;
+	float area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+	if (std::abs(area) < 1e-6f)
+		return;
+	int minX = std::max(0, static_cast<int>(std::floor(std::min({a.x, b.x, c.x}))));
+	int maxX = std::min(int(canvas.width) - 1, static_cast<int>(std::ceil(std::max({a.x, b.x, c.x}))));
+	int minY = std::max(0, static_cast<int>(std::floor(std::min({a.y, b.y, c.y}))));
+	int maxY = std::min(int(canvas.height) - 1, static_cast<int>(std::ceil(std::max({a.y, b.y, c.y}))));
+	for (int y = minY; y <= maxY; y++) {
+		for (int x = minX; x <= maxX; x++) {
+			float px = x + 0.5f, py = y + 0.5f;
+			float w0 = ((b.x - px) * (c.y - py) - (b.y - py) * (c.x - px)) / area;
+			float w1 = ((c.x - px) * (a.y - py) - (c.y - py) * (a.x - px)) / area;
+			float w2 = 1.0f - w0 - w1;
+			if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+				continue;
+			float u =
+			    perspectiveInterp(w0, w1, w2, iz0, iz1, iz2, a.texturePoint.x, b.texturePoint.x, c.texturePoint.x);
+			float v =
+			    perspectiveInterp(w0, w1, w2, iz0, iz1, iz2, a.texturePoint.y, b.texturePoint.y, c.texturePoint.y);
+			int tx = std::clamp(static_cast<int>(u), 0, static_cast<int>(map.width) - 1);
+			int ty = std::clamp(static_cast<int>(v), 0, static_cast<int>(map.height) - 1);
+			canvas.setPixelColour(x, y, map.pixels[tx + map.width * ty]);
+		}
+	}
+}
+
 void drawTexturedTriangleExample(Canvas &canvas) {
 	TextureMap textureMap("assets/texture.ppm");
 	CanvasPoint v0(160, 10);
