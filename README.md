@@ -1,12 +1,10 @@
-# RedNoise — Graphics Rendering Toolkit 🎨
+# RedNoise — Graphics Rendering Toolkit
 
 A small **C++ software rasteriser** built while working through the fundamentals of
 computer graphics. It draws directly into a pixel buffer — no GPU, no OpenGL — and
 presents it with **SDL3**, using **glm** for vector/matrix maths. It's an educational
 codebase: each feature is a self-contained step, from setting individual pixels to
 loading and colouring OBJ models.
-
-![Side](https://github.com/user-attachments/assets/44b6f3c2-e708-4f0d-8958-bcf2c3ad354e)
 
 ## Features
 
