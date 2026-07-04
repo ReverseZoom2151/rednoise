@@ -58,6 +58,7 @@ set(ENGINE_SOURCES
         src/Materials.cpp
         src/Radiosity.cpp
         src/BDPT.cpp
+        src/Metropolis.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
