@@ -466,7 +466,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 }
 
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
-                      const std::vector<Light> &lights) {
+                      const std::vector<Light> &lights, float aperture, float focusDistance) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -486,13 +486,25 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 		for (int x = 0; x < W; x++) {
 			std::mt19937 rng(static_cast<unsigned>((y * W + x) * 9781 + 1)); // per-pixel seed = reproducible
 			std::uniform_real_distribution<float> jitter(-0.5f, 0.5f);
+			std::uniform_real_distribution<float> U(0.0f, 1.0f);
 			glm::vec3 sum(0.0f);
 			for (int s = 0; s < samples; s++) {
 				// Jitter within the pixel: supersampling anti-aliasing for free.
 				float jx = jitter(rng), jy = jitter(rng);
 				glm::vec3 dirCamera((x + 0.5f + jx - W / 2.0f) / f, -(y + 0.5f + jy - H / 2.0f) / f, -1.0f);
 				glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-				sum += pathTrace(camera.position, direction, bvh, used, maxDepth, rng);
+				glm::vec3 origin = camera.position;
+				// Depth of field: sample a lens disk and re-aim at the focal point.
+				if (aperture > 0.0f) {
+					glm::vec3 focalPoint = camera.position + direction * focusDistance;
+					float ang = 2.0f * 3.14159265f * U(rng);
+					float rad = aperture * std::sqrt(U(rng));
+					glm::vec3 right = camera.orientation[0];
+					glm::vec3 up = camera.orientation[1];
+					origin = camera.position + (right * std::cos(ang) + up * std::sin(ang)) * rad;
+					direction = glm::normalize(focalPoint - origin);
+				}
+				sum += pathTrace(origin, direction, bvh, used, maxDepth, rng);
 			}
 			glm::vec3 colour = sum / static_cast<float>(samples) * 255.0f;
 			int r = std::min(255, static_cast<int>(colour.r));
@@ -500,5 +512,21 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 			int b = std::min(255, static_cast<int>(colour.b));
 			canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
 		}
+	}
+}
+
+// Post-process the rendered canvas: Reinhard tone-map (compresses highlights)
+// followed by gamma correction.
+void toneMap(Canvas &canvas, float exposure, float gamma) {
+	for (uint32_t &pixel : canvas.pixels) {
+		glm::vec3 c(static_cast<float>((pixel >> 16) & 0xFF), static_cast<float>((pixel >> 8) & 0xFF),
+		            static_cast<float>(pixel & 0xFF));
+		c = c / 255.0f * exposure;
+		c = c / (c + glm::vec3(1.0f));                     // Reinhard
+		c = glm::pow(c, glm::vec3(1.0f / gamma)) * 255.0f; // gamma
+		int r = std::min(255, static_cast<int>(c.r));
+		int g = std::min(255, static_cast<int>(c.g));
+		int b = std::min(255, static_cast<int>(c.b));
+		pixel = (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
 	}
 }

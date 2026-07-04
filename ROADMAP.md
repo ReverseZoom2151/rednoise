@@ -103,9 +103,9 @@ fully-shaded ray tracer and beyond.
 | --- | --- | --- | --- |
 | [done] Supersampling AA (path tracer) | N sub-samples per pixel, averaged. | ●● | CG, RT, 15 |
 | FXAA (post-process) | Cheap luma-edge anti-aliasing on the final image. | ●●● | CG |
-| Depth of field | Sample a lens aperture for focus blur. | ●●● | 15 |
+| [done] Depth of field | Sample a lens aperture for focus blur. | ●●● | 15 |
 | Motion blur | Integrate over shutter time for moving geometry. | ●●● | 15 |
-| Image post-filters | Tone-map, bloom, colour grade the framebuffer. | ●● | 15 |
+| [done] Image post-filters (tone-map) | Tone-map, bloom, colour grade the framebuffer. | ●● | 15 |
 
 ## Phase 9 - Global illumination (the deep end)
 
