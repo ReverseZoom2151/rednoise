@@ -6,6 +6,7 @@
 #include "Geometry.h"
 #include "Interpolation.h"
 #include "Clouds.h"
+#include "Blackbody.h"
 #include "IrradianceCache.h"
 #include "ColourUtil.h"
 #include "KdTree.h"
@@ -303,6 +304,13 @@ static void testDeepScanModules() {
 	// Disco ball: facetMirror makes every triangle a flat mirror facet.
 	std::vector<ModelTriangle> disco = facetMirror(tris);
 	CHECK(!disco.empty() && disco[0].material == Material::Mirror);
+
+	// Blackbody: warm at low temperature, cool at high, near-neutral at 6500K.
+	glm::vec3 warm = blackbodyRGB(2700.0f), neutral = blackbodyRGB(6500.0f), cool = blackbodyRGB(10000.0f);
+	CHECK(warm.r > warm.b);                                                // 2700K reddish
+	CHECK(cool.b > cool.r);                                                // 10000K bluish
+	CHECK(std::abs(neutral.r - neutral.b) < 0.2f);                         // 6500K near white
+	CHECK(blackbodyRGB(6500.0f, 2.0f).r > blackbodyRGB(6500.0f).r * 1.5f); // intensity scales
 }
 
 int main() {
