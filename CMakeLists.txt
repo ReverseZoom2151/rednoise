@@ -23,6 +23,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BUILD_APP "Build the RedNoise application (requires SDL3)" ON)
 option(BUILD_TESTS "Build the unit tests" ON)
 option(BUILD_HEADLESS "Build the headless PPM renderer (no SDL3)" ON)
+option(BUILD_GPU "Build the OpenCL GPU path tracer (requires an OpenCL SDK)" OFF)
 
 # Optional: multithread the ray tracer. Correctness does not depend on it, so a
 # missing OpenMP just falls back to single-threaded.
@@ -103,6 +104,15 @@ if (BUILD_HEADLESS)
     add_executable(render_ocean tools/render_ocean.cpp ${ENGINE_SOURCES})
     target_include_directories(render_ocean PRIVATE framework third_party src)
     link_openmp(render_ocean)
+endif ()
+
+# --- GPU path tracer (OpenCL) -----------------------------------------------
+# The kernel gpu/pathtracer.cl is loaded at runtime; run from the repo root.
+if (BUILD_GPU)
+    find_package(OpenCL REQUIRED)
+    add_executable(gpu_pathtracer gpu/gpu_pathtracer.cpp ${ENGINE_SOURCES})
+    target_include_directories(gpu_pathtracer PRIVATE framework third_party src)
+    target_link_libraries(gpu_pathtracer PRIVATE OpenCL::OpenCL)
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------

@@ -95,7 +95,7 @@ fully-shaded ray tracer and beyond.
 | [done] Near-plane clipping | Clip geometry crossing the camera plane (fixes projection blowups). | ●●● | 15, CG |
 | [done] BVH / kd-tree / octree | Spatial acceleration so raytracing scales past brute force O(n). | ●●●● | 15 |
 | [done] Multithreading (OpenMP) | Parallelise the pixel loop; near-linear speedup. | ●● | CG, 15 |
-| GPU (OpenCL / compute) | Offload tracing to the GPU for real-time. | ●●●●● | 15 |
+| [done] GPU (OpenCL / compute) | Offload tracing to the GPU for real-time. | ●●●●● | 15 |
 
 ## Phase 8 - Image quality
 
@@ -130,7 +130,7 @@ fully-shaded ray tracer and beyond.
 
 ## Moonshots (graded 100% in the unit's gallery)
 
-- Real-time GPU path tracer with reflection + refraction.
+- [done] Real-time GPU path tracer (OpenCL kernel, ~800 fps at 320x240 on an RTX A4000).
 - [done] Physically-based ocean-water surface (Gerstner waves, glass material, photon caustics).
 - [done] Physically-based rendering (PBR) material model (metallic/roughness).
 
