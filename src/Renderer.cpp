@@ -99,21 +99,29 @@ static uint32_t shadeHit(const RayTriangleIntersection &hit, const glm::vec3 &ra
 	float distance = glm::length(toLight);
 	glm::vec3 lightDir = toLight / distance;
 
-	float proximity = lightIntensity / (4.0f * 3.14159265f * distance * distance);
-	float incidence = std::max(0.0f, glm::dot(normal, lightDir));
-	float brightness = proximity * incidence;
-
 	// Hard shadow: something between the surface and the light occludes it.
 	RayTriangleIntersection shadow =
 	    getClosestIntersection(point, lightDir, model, static_cast<int>(hit.triangleIndex));
-	if (shadow.hit && shadow.distanceFromCamera < distance)
-		brightness = 0.0f;
+	bool inShadow = shadow.hit && shadow.distanceFromCamera < distance;
 
-	brightness = std::min(1.0f, std::max(brightness, ambient));
+	float proximity = lightIntensity / (4.0f * 3.14159265f * distance * distance);
+	float incidence = std::max(0.0f, glm::dot(normal, lightDir));
+	float diffuse = inShadow ? 0.0f : proximity * incidence;
+
+	// Specular highlight (Blinn/Phong): reflect the light about the normal and
+	// compare with the view direction. Added as a white highlight.
+	float specular = 0.0f;
+	if (!inShadow && incidence > 0.0f) {
+		glm::vec3 viewDir = -rayDirection;
+		glm::vec3 reflectDir = 2.0f * glm::dot(normal, lightDir) * normal - lightDir;
+		specular = std::pow(std::max(0.0f, glm::dot(reflectDir, viewDir)), 64.0f);
+	}
+
+	float brightness = std::min(1.0f, std::max(diffuse, ambient));
 	const Colour &c = hit.intersectedTriangle.colour;
-	int r = static_cast<int>(c.red * brightness);
-	int g = static_cast<int>(c.green * brightness);
-	int b = static_cast<int>(c.blue * brightness);
+	int r = std::min(255, static_cast<int>(c.red * brightness + 255.0f * specular));
+	int g = std::min(255, static_cast<int>(c.green * brightness + 255.0f * specular));
+	int b = std::min(255, static_cast<int>(c.blue * brightness + 255.0f * specular));
 	return (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
 }
 
