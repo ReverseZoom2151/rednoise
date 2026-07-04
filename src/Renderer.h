@@ -19,6 +19,11 @@ void renderWireframe(const std::vector<ModelTriangle> &model, const Camera &came
 void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
                       bool backfaceCull = false);
 
+// Rasteriser with shadow mapping: a depth map rendered from `lightPos` shadows
+// the scene, plus simple diffuse lighting.
+void renderShadowMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                        const glm::vec3 &lightPos);
+
 // The ray tracer shades each hit over all `lights` (point/directional/spot, with
 // soft shadows for area lights), adding specular and an ambient floor; mirror
 // and glass materials reflect / refract recursively. An empty `lights` uses a

@@ -115,6 +115,111 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 	}
 }
 
+// Rasterise the model, but shadow it with a depth map rendered from the light
+// (classic shadow mapping): pass 1 stores nearest depth from the light's view;
+// pass 2 reprojects each fragment's world position into that map to test
+// occlusion, and adds simple diffuse lighting.
+void renderShadowMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                        const glm::vec3 &lightPos) {
+	const int SW = 512, SH = 512;
+	Camera lightCam(SW, SH, 2.0f, lightPos);
+	lightCam.scale = 140.0f;
+	lightCam.lookAt(glm::vec3(0.0f, -1.0f, 0.0f)); // look down over the scene
+	std::vector<float> shadowMap(static_cast<size_t>(SW) * SH, 1e30f);
+
+	// Pass 1: depth from the light.
+	for (const ModelTriangle &tri : model) {
+		CanvasPoint lp[3];
+		bool ok = true;
+		for (int i = 0; i < 3; i++) {
+			lp[i] = lightCam.projectVertex(tri.vertices[i]);
+			if (lp[i].depth <= 0.0f)
+				ok = false;
+		}
+		if (!ok)
+			continue;
+		float area = edgeFunction(lp[0], lp[1], lp[2].x, lp[2].y);
+		if (std::abs(area) < 1e-6f)
+			continue;
+		int minX = std::max(0, static_cast<int>(std::floor(std::min({lp[0].x, lp[1].x, lp[2].x}))));
+		int maxX = std::min(SW - 1, static_cast<int>(std::ceil(std::max({lp[0].x, lp[1].x, lp[2].x}))));
+		int minY = std::max(0, static_cast<int>(std::floor(std::min({lp[0].y, lp[1].y, lp[2].y}))));
+		int maxY = std::min(SH - 1, static_cast<int>(std::ceil(std::max({lp[0].y, lp[1].y, lp[2].y}))));
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				float w0 = edgeFunction(lp[1], lp[2], x + 0.5f, y + 0.5f) / area;
+				float w1 = edgeFunction(lp[2], lp[0], x + 0.5f, y + 0.5f) / area;
+				float w2 = edgeFunction(lp[0], lp[1], x + 0.5f, y + 0.5f) / area;
+				if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+					continue;
+				float depth = w0 * lp[0].depth + w1 * lp[1].depth + w2 * lp[2].depth;
+				size_t idx = static_cast<size_t>(y) * SW + x;
+				if (depth < shadowMap[idx])
+					shadowMap[idx] = depth;
+			}
+		}
+	}
+
+	// Pass 2: camera view, shadow-tested and diffuse-lit.
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	std::vector<float> depthBuffer(static_cast<size_t>(W) * H, 0.0f);
+	const float bias = 0.03f, ambient = 0.25f;
+	for (const ModelTriangle &tri : model) {
+		CanvasPoint p[3];
+		bool ok = true;
+		for (int i = 0; i < 3; i++) {
+			p[i] = camera.projectVertex(tri.vertices[i]);
+			if (p[i].depth <= 0.0f)
+				ok = false;
+		}
+		if (!ok)
+			continue;
+		float area = edgeFunction(p[0], p[1], p[2].x, p[2].y);
+		if (std::abs(area) < 1e-6f)
+			continue;
+		int minX = std::max(0, static_cast<int>(std::floor(std::min({p[0].x, p[1].x, p[2].x}))));
+		int maxX = std::min(W - 1, static_cast<int>(std::ceil(std::max({p[0].x, p[1].x, p[2].x}))));
+		int minY = std::max(0, static_cast<int>(std::floor(std::min({p[0].y, p[1].y, p[2].y}))));
+		int maxY = std::min(H - 1, static_cast<int>(std::ceil(std::max({p[0].y, p[1].y, p[2].y}))));
+		float inv0 = 1.0f / p[0].depth, inv1 = 1.0f / p[1].depth, inv2 = 1.0f / p[2].depth;
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				float w0 = edgeFunction(p[1], p[2], x + 0.5f, y + 0.5f) / area;
+				float w1 = edgeFunction(p[2], p[0], x + 0.5f, y + 0.5f) / area;
+				float w2 = edgeFunction(p[0], p[1], x + 0.5f, y + 0.5f) / area;
+				if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+					continue;
+				float invDepth = w0 * inv0 + w1 * inv1 + w2 * inv2;
+				size_t idx = static_cast<size_t>(y) * W + x;
+				if (invDepth <= depthBuffer[idx])
+					continue;
+				depthBuffer[idx] = invDepth;
+				// Perspective-correct world position of this fragment.
+				glm::vec3 wp =
+				    (w0 * tri.vertices[0] * inv0 + w1 * tri.vertices[1] * inv1 + w2 * tri.vertices[2] * inv2) /
+				    invDepth;
+				bool shadow = false;
+				CanvasPoint slp = lightCam.projectVertex(wp);
+				if (slp.depth > 0.0f) {
+					int sx = static_cast<int>(slp.x), sy = static_cast<int>(slp.y);
+					if (sx >= 0 && sx < SW && sy >= 0 && sy < SH && slp.depth > shadowMap[sy * SW + sx] + bias)
+						shadow = true;
+				}
+				glm::vec3 L = glm::normalize(lightPos - wp);
+				float diffuse = std::max(0.0f, glm::dot(tri.normal, L));
+				float b = std::min(1.0f, ambient + (shadow ? 0.0f : diffuse));
+				const Colour &c = tri.colour;
+				int r = std::min(255, static_cast<int>(c.red * b));
+				int g = std::min(255, static_cast<int>(c.green * b));
+				int bl = std::min(255, static_cast<int>(c.blue * b));
+				canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (bl & 0xFF));
+			}
+		}
+	}
+}
+
 // Fraction of a light visible from `point` (1 = lit, 0 = shadowed). Point and
 // directional lights are binary; an area light (radius > 0) is sampled over a
 // fixed disk for soft shadows (deterministic pattern, so no noise).

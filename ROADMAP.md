@@ -83,7 +83,7 @@ fully-shaded ray tracer and beyond.
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
 | [done] Soft shadows / area lights | Jitter many samples over a light's area, average occlusion. | ●●● | 20, CG, 15 |
-| Shadow-buffer (rasteriser) | Render depth from the light, reproject to shade (shadow mapping). | ●●● | CG |
+| [done] Shadow-buffer (rasteriser) | Render depth from the light, reproject to shade (shadow mapping). | ●●● | CG |
 | [done] Multiple + typed lights | Point (attenuation), directional, spotlight cone. | ●● | RT, 15 |
 | [done] Volumetric / 3D light source (area light) | Light with spatial extent for richer soft shadows. | ●●●● | 15 |
 
