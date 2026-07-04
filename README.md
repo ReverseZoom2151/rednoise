@@ -257,6 +257,29 @@ The code uses the OpenCL 1.2 API subset for the broadest reach but runs on newer
 runtimes (3.0, etc.) at full speed. Require a newer runtime by raising the target
 level: `cmake -B build -DBUILD_GPU=ON -DOPENCL_TARGET_VERSION=300`.
 
+### Vulkan compute path tracer (headless)
+
+A second GPU backend that ray-traces in a Vulkan compute shader. It is
+**SDK-free**: it declares no Vulkan prototypes and loads `vulkan-1.dll` /
+`libvulkan.so.1` at runtime, so the build needs only the Khronos Vulkan-Headers
+(fetched automatically) and it runs against any installed Vulkan driver. The
+compute shader is precompiled to SPIR-V and committed, so no shader compiler is
+needed to build either.
+
+```sh
+cmake -B build -S . -DBUILD_VULKAN=ON     # fetches Vulkan-Headers
+cmake --build build --target vk_pathtracer
+./build/vk_pathtracer assets/cornell-box.obj vk.png 480 360
+```
+
+Regenerate the SPIR-V after editing `gpu/pathtracer.comp` (needs
+`glslangValidator` from the Vulkan SDK or a prebuilt glslang):
+
+```sh
+glslangValidator -V --target-env vulkan1.1 --vn kPathtracerSpv \
+    -o gpu/spv_pathtracer.h gpu/pathtracer.comp
+```
+
 ## Using it from C++
 
 The engine is a plain C++ library: load a mesh, aim a camera, pick a render mode,
