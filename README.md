@@ -216,6 +216,21 @@ ctest --test-dir build --output-on-failure          # unit tests
 ./build/render_ocean ocean 24                        # 24 animated ocean frames
 ```
 
+### Command-line tool (`rn`)
+
+A single front-end wraps the common jobs and writes web-ready PNG (or PPM):
+
+```sh
+./build/rn render assets/cornell-box.obj -o out.png --mode pathtraced --spp 128 --size 640x480
+./build/rn render assets/cornell-box.obj -o quick.png --mode raytraced
+./build/rn animate assets/cornell-box.obj --frames 48 --ease reciprocal -o frame
+./build/rn version
+./build/rn help
+```
+
+Render modes: `wireframe`, `rasterised`, `raytraced`, `pathtraced`, `photon`,
+`radiosity`. Output format follows the `-o` extension (`.png` default, or `.ppm`).
+
 ### GPU path tracer (OpenCL)
 
 Optional and vendor-neutral: standard OpenCL, no CUDA. It builds against whatever

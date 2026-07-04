@@ -233,6 +233,15 @@ if (BUILD_HEADLESS)
     target_include_directories(render_ocean PRIVATE framework src)
     target_link_libraries(render_ocean PRIVATE glm_headers)
     link_openmp(render_ocean)
+
+    # Unified CLI front-end (render / animate / version). Output binary is `rn`
+    # (lowercase, to avoid colliding with the `RedNoise` app on case-insensitive
+    # filesystems).
+    add_executable(rednoise_cli tools/cli.cpp ${ENGINE_SOURCES})
+    set_target_properties(rednoise_cli PROPERTIES OUTPUT_NAME rn)
+    target_include_directories(rednoise_cli PRIVATE framework src)
+    target_link_libraries(rednoise_cli PRIVATE glm_headers)
+    link_openmp(rednoise_cli)
 endif ()
 
 # --- GPU path tracer (OpenCL) -----------------------------------------------
