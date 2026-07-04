@@ -211,7 +211,7 @@ future Rust / Python / WASM bindings target.
 ## Project structure
 
 ```
-redNoise/
+rednoise/
 ├── src/                    # the renderer engine + application
 │   ├── RedNoise.cpp        #   application: window loop, input, render-mode switch
 │   ├── Camera / Renderer   #   projection; wireframe/raster/ray/path/photon renderers
@@ -220,7 +220,11 @@ redNoise/
 │   ├── Light / Photon / Noise    #   lights, photon map, Perlin noise
 │   ├── Materials / ObjLoader / Transform  #   presets, OBJ/MTL loading, instancing, LOD
 │   ├── Ocean / Noise             #   Gerstner-wave ocean, Perlin noise
+│   ├── capi.cpp                  #   C ABI implementation
 │   └── Interpolation / Drawing   #   maths + line/triangle/texture drawing
+├── include/rednoise/       # public C API header (installed)
+├── examples/               # c_consumer.c (uses the C ABI)
+├── cmake/                  # rednoiseConfig.cmake.in (package config)
 ├── gpu/                    # OpenCL GPU path tracer: pathtracer.cl + host
 ├── framework/             # the "sdw" teaching framework (headers + sources together)
 │   ├── DrawingWindow.*     #   SDL3 window (the only SDL dependency)
