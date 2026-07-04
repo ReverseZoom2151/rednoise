@@ -1,42 +1,112 @@
+#include "Camera.h"
 #include "Drawing.h"
 #include "ObjLoader.h"
+#include "Renderer.h"
 #include <DrawingWindow.h>
 #include <ModelTriangle.h>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
 
 #define WIDTH 320
 #define HEIGHT 240
 
-void draw(DrawingWindow &window) {
-	window.clearPixels();
-	// The Cornell box is loaded once (function-local static) rather than every frame.
+enum class RenderMode { Wireframe, Rasterised, Raytraced };
+
+static RenderMode renderMode = RenderMode::Rasterised;
+static Camera camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
+static bool orbiting = false;
+
+static const std::vector<ModelTriangle> &scene() {
 	static std::vector<ModelTriangle> triangles = loadOBJ("assets/cornell-box.obj", 0.35f);
 	static bool logged = false;
 	if (!logged) {
 		std::cout << "Loaded " << triangles.size() << " triangles from cornell-box.obj" << std::endl;
-		for (const auto &triangle : triangles) {
-			std::cout << triangle.colour << " " << triangle;
-		}
 		logged = true;
 	}
-	// TODO(feature roadmap §6): project + rasterise `triangles` here.
+	return triangles;
+}
+
+void draw(DrawingWindow &window) {
+	const std::vector<ModelTriangle> &model = scene();
+	if (orbiting)
+		camera.orbitY(0.02f, glm::vec3(0.0f, 0.0f, 0.0f));
+	switch (renderMode) {
+	case RenderMode::Wireframe:
+		renderWireframe(model, camera, window);
+		break;
+	case RenderMode::Rasterised:
+		renderRasterised(model, camera, window);
+		break;
+	case RenderMode::Raytraced:
+		renderRaytraced(model, camera, window);
+		break;
+	}
 }
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
-	if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
-		if (event.key.key == SDLK_LEFT)
-			std::cout << "LEFT" << std::endl;
-		else if (event.key.key == SDLK_RIGHT)
-			std::cout << "RIGHT" << std::endl;
-		else if (event.key.key == SDLK_UP)
-			std::cout << "UP" << std::endl;
-		else if (event.key.key == SDLK_DOWN)
-			std::cout << "DOWN" << std::endl;
-		else if (event.key.key == SDLK_U)
-			drawRandomTriangle(window);
-		else if (event.key.key == SDLK_F)
-			drawRandomFilledTriangle(window);
+	if (event.type == SDL_EVENT_KEY_DOWN) {
+		float step = 0.1f;
+		switch (event.key.key) {
+		// Camera translation.
+		case SDLK_A:
+			camera.translate(glm::vec3(-step, 0.0f, 0.0f));
+			break;
+		case SDLK_D:
+			camera.translate(glm::vec3(step, 0.0f, 0.0f));
+			break;
+		case SDLK_W:
+			camera.translate(glm::vec3(0.0f, step, 0.0f));
+			break;
+		case SDLK_S:
+			camera.translate(glm::vec3(0.0f, -step, 0.0f));
+			break;
+		case SDLK_Q:
+			camera.translate(glm::vec3(0.0f, 0.0f, -step));
+			break;
+		case SDLK_E:
+			camera.translate(glm::vec3(0.0f, 0.0f, step));
+			break;
+		// Orientation (arrow keys pan/tilt).
+		case SDLK_LEFT:
+			camera.rotateY(-0.05f);
+			break;
+		case SDLK_RIGHT:
+			camera.rotateY(0.05f);
+			break;
+		case SDLK_UP:
+			camera.rotateX(-0.05f);
+			break;
+		case SDLK_DOWN:
+			camera.rotateX(0.05f);
+			break;
+		// Camera actions.
+		case SDLK_L:
+			camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
+			break;
+		case SDLK_O:
+			orbiting = !orbiting;
+			break;
+		case SDLK_R:
+			camera = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
+			orbiting = false;
+			break;
+		// Render modes.
+		case SDLK_1:
+			renderMode = RenderMode::Wireframe;
+			std::cout << "wireframe" << std::endl;
+			break;
+		case SDLK_2:
+			renderMode = RenderMode::Rasterised;
+			std::cout << "rasterised" << std::endl;
+			break;
+		case SDLK_3:
+			renderMode = RenderMode::Raytraced;
+			std::cout << "raytraced" << std::endl;
+			break;
+		default:
+			break;
+		}
 	} else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -45,6 +115,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 
 int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
+	camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 	SDL_Event event;
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !

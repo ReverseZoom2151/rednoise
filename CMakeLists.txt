@@ -54,6 +54,9 @@ if (BUILD_TESTS)
             tests/tests.cpp
             src/Interpolation.cpp
             src/ObjLoader.cpp
+            src/Camera.cpp
+            src/Geometry.cpp
+            framework/CanvasPoint.cpp
             framework/Colour.cpp
             framework/ModelTriangle.cpp
             framework/TexturePoint.cpp

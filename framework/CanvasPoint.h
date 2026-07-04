@@ -2,7 +2,6 @@
 
 #include "TexturePoint.h"
 #include <iostream>
-#include "DrawingWindow.h"
 
 struct CanvasPoint {
 	float x{};
