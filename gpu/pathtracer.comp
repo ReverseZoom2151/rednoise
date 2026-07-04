@@ -1,0 +1,118 @@
+#version 450
+
+// Headless compute ray tracer: one invocation per pixel casts a primary ray,
+// finds the closest triangle (brute force Moller-Trumbore), and shades it with a
+// point light plus a hard shadow ray and an ambient term. Output is packed RGBA8
+// written to a storage buffer that the host reads back and saves as PNG.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+struct Tri {
+	vec4 v0; // xyz = vertex 0
+	vec4 v1; // xyz = vertex 1
+	vec4 v2; // xyz = vertex 2
+	vec4 n;  // xyz = face normal
+	vec4 col; // rgb = albedo in [0,1]
+};
+
+layout(std430, binding = 0) readonly buffer Tris {
+	Tri tris[];
+};
+layout(std430, binding = 1) writeonly buffer Pixels {
+	uint pixels[];
+};
+
+layout(push_constant) uniform PC {
+	vec4 camPos;   // xyz camera position
+	vec4 camRight; // orientation column 0
+	vec4 camUp;    // orientation column 1
+	vec4 camFwd;   // orientation column 2
+	vec4 light;    // xyz light position, w intensity
+	ivec4 dims;    // x=width, y=height, z=triangle count, w=unused
+	vec4 params;   // x = focalLength*scale
+}
+pc;
+
+// Moller-Trumbore. Returns t (>0) on a hit, or -1.
+float hitTri(vec3 ro, vec3 rd, Tri t, out vec3 nrm, out vec3 alb) {
+	vec3 e0 = t.v1.xyz - t.v0.xyz;
+	vec3 e1 = t.v2.xyz - t.v0.xyz;
+	vec3 p = cross(rd, e1);
+	float det = dot(e0, p);
+	if (abs(det) < 1e-7)
+		return -1.0;
+	float inv = 1.0 / det;
+	vec3 tv = ro - t.v0.xyz;
+	float u = dot(tv, p) * inv;
+	if (u < 0.0 || u > 1.0)
+		return -1.0;
+	vec3 q = cross(tv, e0);
+	float v = dot(rd, q) * inv;
+	if (v < 0.0 || u + v > 1.0)
+		return -1.0;
+	float dist = dot(e1, q) * inv;
+	if (dist <= 1e-4)
+		return -1.0;
+	nrm = t.n.xyz;
+	alb = t.col.rgb;
+	return dist;
+}
+
+// Closest hit over all triangles. Returns distance or -1, fills normal/albedo.
+float trace(vec3 ro, vec3 rd, out vec3 nrm, out vec3 alb) {
+	float best = 1e30;
+	bool hit = false;
+	for (int i = 0; i < pc.dims.z; i++) {
+		vec3 n, a;
+		float d = hitTri(ro, rd, tris[i], n, a);
+		if (d > 0.0 && d < best) {
+			best = d;
+			nrm = n;
+			alb = a;
+			hit = true;
+		}
+	}
+	return hit ? best : -1.0;
+}
+
+// Any-hit within maxDist (for shadow rays).
+bool occluded(vec3 ro, vec3 rd, float maxDist) {
+	for (int i = 0; i < pc.dims.z; i++) {
+		vec3 n, a;
+		float d = hitTri(ro, rd, tris[i], n, a);
+		if (d > 0.0 && d < maxDist)
+			return true;
+	}
+	return false;
+}
+
+void main() {
+	uint x = gl_GlobalInvocationID.x, y = gl_GlobalInvocationID.y;
+	int W = pc.dims.x, H = pc.dims.y;
+	if (x >= uint(W) || y >= uint(H))
+		return;
+
+	float f = pc.params.x;
+	vec3 dc = vec3((float(x) - float(W) * 0.5) / f, -(float(y) - float(H) * 0.5) / f, -1.0);
+	vec3 rd = normalize(pc.camRight.xyz * dc.x + pc.camUp.xyz * dc.y + pc.camFwd.xyz * dc.z);
+	vec3 ro = pc.camPos.xyz;
+
+	vec3 colour = vec3(0.53, 0.68, 0.92); // sky background
+	vec3 nrm, alb;
+	float d = trace(ro, rd, nrm, alb);
+	if (d > 0.0) {
+		vec3 hitP = ro + rd * d;
+		vec3 nl = dot(nrm, rd) < 0.0 ? nrm : -nrm; // face the viewer
+		vec3 toL = pc.light.xyz - hitP;
+		float dist = length(toL);
+		toL /= dist;
+		float diff = max(0.0, dot(nl, toL));
+		float shade = 0.15; // ambient
+		if (diff > 0.0 && !occluded(hitP + nl * 1e-3, toL, dist - 2e-3))
+			shade += diff * pc.light.w / (dist * dist);
+		colour = alb * clamp(shade, 0.0, 1.0);
+	}
+
+	uvec3 c = uvec3(clamp(colour, 0.0, 1.0) * 255.0);
+	pixels[y * uint(W) + x] = (255u << 24) | (c.r << 16) | (c.g << 8) | c.b; // 0xAARRGGBB (Canvas format)
+}
