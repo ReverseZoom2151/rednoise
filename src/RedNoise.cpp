@@ -43,7 +43,8 @@ static int randInt(int upperExclusive) {
 
 std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOfValues) {
 	std::vector<float> result;
-	if (numberOfValues == 0) return result;
+	if (numberOfValues == 0)
+		return result;
 	if (numberOfValues == 1) {
 		result.push_back(from);
 		return result;
@@ -65,7 +66,8 @@ void interpolateSingleFloatsExample() {
 
 std::vector<glm::vec3> interpolateThreeElementValues(const glm::vec3 &from, const glm::vec3 &to, int numberOfValues) {
 	std::vector<glm::vec3> result;
-	if (numberOfValues <= 0) return result;
+	if (numberOfValues <= 0)
+		return result;
 	if (numberOfValues == 1) {
 		result.push_back(from);
 		return result;
@@ -90,7 +92,8 @@ void interpolateThreeElementValuesExample() {
 
 // Scalar linear map of x from [x1,x2] onto [y1,y2]. Degenerate source range -> y1.
 float interpolation(float x, float x1, float x2, float y1, float y2) {
-	if (x2 == x1) return y1;
+	if (x2 == x1)
+		return y1;
 	return y1 + (x - x1) * ((y2 - y1) / (x2 - x1));
 }
 
@@ -125,10 +128,9 @@ void twoDimensionalColourInterpolation(DrawingWindow &window) {
 	std::vector<glm::vec3> rightColumnColours = interpolateThreeElementValues(topRight, bottomRight, window.height);
 	for (size_t y = 0; y < window.height; y++) {
 		std::vector<glm::vec3> rowColours =
-		        interpolateThreeElementValues(leftColumnColours[y], rightColumnColours[y], window.width);
+		    interpolateThreeElementValues(leftColumnColours[y], rightColumnColours[y], window.width);
 		for (size_t x = 0; x < window.width; x++) {
-			window.setPixelColour(x, y,
-			                      packColour(int(rowColours[x].x), int(rowColours[x].y), int(rowColours[x].z)));
+			window.setPixelColour(x, y, packColour(int(rowColours[x].x), int(rowColours[x].y), int(rowColours[x].z)));
 		}
 	}
 }
@@ -147,7 +149,8 @@ void drawLine(const CanvasPoint &from, const CanvasPoint &to, const Colour &colo
 	if (numberOfSteps == 0.0f) {
 		int x = static_cast<int>(std::round(from.x));
 		int y = static_cast<int>(std::round(from.y));
-		if (x >= 0 && x < int(window.width) && y >= 0 && y < int(window.height)) window.setPixelColour(x, y, packed);
+		if (x >= 0 && x < int(window.width) && y >= 0 && y < int(window.height))
+			window.setPixelColour(x, y, packed);
 		return;
 	}
 	float xStepSize = xDiff / numberOfSteps;
@@ -155,7 +158,8 @@ void drawLine(const CanvasPoint &from, const CanvasPoint &to, const Colour &colo
 	for (float i = 0.0f; i <= numberOfSteps; i++) {
 		int x = static_cast<int>(std::round(from.x + (xStepSize * i)));
 		int y = static_cast<int>(std::round(from.y + (yStepSize * i)));
-		if (x >= 0 && x < int(window.width) && y >= 0 && y < int(window.height)) window.setPixelColour(x, y, packed);
+		if (x >= 0 && x < int(window.width) && y >= 0 && y < int(window.height))
+			window.setPixelColour(x, y, packed);
 	}
 }
 
@@ -241,7 +245,8 @@ void drawTexturedLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, T
 	float textureXDiff = to.texturePoint.x - from.texturePoint.x;
 	float textureYDiff = to.texturePoint.y - from.texturePoint.y;
 	float numberOfSteps = std::max(std::abs(xDiff), std::abs(yDiff));
-	if (numberOfSteps == 0.0f) return;
+	if (numberOfSteps == 0.0f)
+		return;
 	float xStepSize = xDiff / numberOfSteps;
 	float yStepSize = yDiff / numberOfSteps;
 	float textureXstepSize = textureXDiff / numberOfSteps;
@@ -262,9 +267,12 @@ void drawTexturedLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, T
 }
 
 void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, TextureMap &map) {
-	if ((triangle.v0().y) > (triangle.v1()).y) std::swap(triangle.vertices[0], triangle.vertices[1]);
-	if ((triangle.v0().y) > (triangle.v2()).y) std::swap(triangle.vertices[0], triangle.vertices[2]);
-	if ((triangle.v1().y) > (triangle.v2()).y) std::swap(triangle.vertices[1], triangle.vertices[2]);
+	if ((triangle.v0().y) > (triangle.v1()).y)
+		std::swap(triangle.vertices[0], triangle.vertices[1]);
+	if ((triangle.v0().y) > (triangle.v2()).y)
+		std::swap(triangle.vertices[0], triangle.vertices[2]);
+	if ((triangle.v1().y) > (triangle.v2()).y)
+		std::swap(triangle.vertices[1], triangle.vertices[2]);
 	float xDiff = (triangle.v2().x) - (triangle.v0().x);
 	float yDiff = (triangle.v2().y) - (triangle.v0().y);
 	float ratio = (yDiff != 0.0f) ? xDiff / yDiff : 0.0f;
@@ -283,29 +291,25 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 	for (int i = 0; i < firstDiff; i++) {
 		CanvasPoint point1(sideA1[i], i + triangle.v0().y);
 		point1.texturePoint = TexturePoint(
-		        interpolation(sideA1[i], subPoint.x, triangle.v0().x, subPointX, triangle.v0().texturePoint.x),
-		        interpolation(i + triangle.v0().y, subPoint.y, triangle.v0().y, subPointY,
-		                      triangle.v0().texturePoint.y));
+		    interpolation(sideA1[i], subPoint.x, triangle.v0().x, subPointX, triangle.v0().texturePoint.x),
+		    interpolation(i + triangle.v0().y, subPoint.y, triangle.v0().y, subPointY, triangle.v0().texturePoint.y));
 		CanvasPoint point2(sideA2[i], i + triangle.v0().y);
-		point2.texturePoint = TexturePoint(
-		        interpolation(sideA2[i], triangle.v0().x, triangle.v1().x, triangle.v0().texturePoint.x,
-		                      triangle.v1().texturePoint.x),
-		        interpolation(i + triangle.v0().y, triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.y,
-		                      triangle.v1().texturePoint.y));
+		point2.texturePoint = TexturePoint(interpolation(sideA2[i], triangle.v0().x, triangle.v1().x,
+		                                                 triangle.v0().texturePoint.x, triangle.v1().texturePoint.x),
+		                                   interpolation(i + triangle.v0().y, triangle.v0().y, triangle.v1().y,
+		                                                 triangle.v0().texturePoint.y, triangle.v1().texturePoint.y));
 		drawTexturedLine(window, point1, point2, map);
 	}
 	for (int i = 0; i < secondDiff; i++) {
 		CanvasPoint point1(sideB1[i], i + triangle.v1().y);
 		point1.texturePoint = TexturePoint(
-		        interpolation(sideB1[i], subPoint.x, triangle.v2().x, subPointX, triangle.v2().texturePoint.x),
-		        interpolation(i + triangle.v1().y, subPoint.y, triangle.v2().y, subPointY,
-		                      triangle.v2().texturePoint.y));
+		    interpolation(sideB1[i], subPoint.x, triangle.v2().x, subPointX, triangle.v2().texturePoint.x),
+		    interpolation(i + triangle.v1().y, subPoint.y, triangle.v2().y, subPointY, triangle.v2().texturePoint.y));
 		CanvasPoint point2(sideB2[i], i + triangle.v1().y);
-		point2.texturePoint = TexturePoint(
-		        interpolation(sideB2[i], triangle.v2().x, triangle.v1().x, triangle.v2().texturePoint.x,
-		                      triangle.v1().texturePoint.x),
-		        interpolation(i + triangle.v1().y, triangle.v2().y, triangle.v1().y, triangle.v2().texturePoint.y,
-		                      triangle.v1().texturePoint.y));
+		point2.texturePoint = TexturePoint(interpolation(sideB2[i], triangle.v2().x, triangle.v1().x,
+		                                                 triangle.v2().texturePoint.x, triangle.v1().texturePoint.x),
+		                                   interpolation(i + triangle.v1().y, triangle.v2().y, triangle.v1().y,
+		                                                 triangle.v2().texturePoint.y, triangle.v1().texturePoint.y));
 		drawTexturedLine(window, point1, point2, map);
 	}
 	drawCanvasStrokedTriangle(triangle, Colour(255, 255, 255), window);
@@ -347,8 +351,7 @@ std::map<std::string, Colour> loadMTL(const std::string &filename) {
 			float r, g, b;
 			ss >> r >> g >> b;
 			materials[currentName] =
-			        Colour(currentName, static_cast<int>(r * 255), static_cast<int>(g * 255),
-			               static_cast<int>(b * 255));
+			    Colour(currentName, static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
 		}
 	}
 	return materials;
@@ -366,7 +369,8 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 	// Directory containing the .obj, so a relative mtllib path resolves correctly.
 	std::string directory;
 	size_t slash = filename.find_last_of("/\\");
-	if (slash != std::string::npos) directory = filename.substr(0, slash + 1);
+	if (slash != std::string::npos)
+		directory = filename.substr(0, slash + 1);
 
 	std::map<std::string, Colour> materials;
 	std::vector<glm::vec3> vertices;
@@ -384,7 +388,8 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 			std::string mtlName;
 			ss >> mtlName;
 			auto it = materials.find(mtlName);
-			if (it != materials.end()) currentColour = it->second;
+			if (it != materials.end())
+				currentColour = it->second;
 		} else if (type == "v") {
 			float x, y, z;
 			ss >> x >> y >> z;
@@ -396,8 +401,7 @@ std::vector<ModelTriangle> loadOBJ(const std::string &filename, float scale) {
 			int index1 = std::stoi(v1) - 1;
 			int index2 = std::stoi(v2) - 1;
 			int index3 = std::stoi(v3) - 1;
-			triangles.push_back(
-			        ModelTriangle(vertices[index1], vertices[index2], vertices[index3], currentColour));
+			triangles.push_back(ModelTriangle(vertices[index1], vertices[index2], vertices[index3], currentColour));
 		}
 	}
 	return triangles;
@@ -447,7 +451,8 @@ int main(int argc, char *argv[]) {
 	SDL_Event event;
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
-		if (window.pollForInputEvents(event)) handleEvent(event, window);
+		if (window.pollForInputEvents(event))
+			handleEvent(event, window);
 		draw(window);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen!
 		window.renderFrame();

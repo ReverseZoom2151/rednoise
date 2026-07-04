@@ -9,7 +9,8 @@ TextureMap::TextureMap(const std::string &filename) {
 	// Read the width and height line
 	std::getline(inputStream, nextLine);
 	// Skip over any comment lines !
-	while (nextLine.at(0) == '#') std::getline(inputStream, nextLine);
+	while (nextLine.at(0) == '#')
+		std::getline(inputStream, nextLine);
 	auto widthAndHeight = split(nextLine, ' ');
 	if (widthAndHeight.size() != 2)
 		throw std::invalid_argument("Failed to parse width and height line, line was `" + nextLine + "`");
