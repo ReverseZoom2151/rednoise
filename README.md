@@ -342,7 +342,41 @@ rn_scene_free(scene);
 ```
 
 A complete example is in `examples/c_consumer.c`. This C API is also the surface
-future Rust / Python / WASM bindings target.
+the Python and Rust bindings below wrap.
+
+## Language bindings
+
+Ready-to-use bindings wrap the C ABI; each links the installed `rednoise` library
+(see the binding's README for building it):
+
+- **Python** (`bindings/python`) - pure ctypes, no compiled extension:
+
+  ```python
+  import rednoise
+  scene = rednoise.Scene.load_obj("assets/cornell-box.obj", 0.35)
+  scene.render(mode="pathtraced", width=640, height=480, samples=128).save("cornell.png")
+  ```
+
+- **Rust** (`bindings/rust`) - a safe crate:
+
+  ```rust
+  let scene = rednoise::Scene::load_obj("assets/cornell-box.obj", 0.35)?;
+  scene.render(rednoise::Mode::Pathtraced, 640, 480, 4.0, 128)?.save_png("cornell.png")?;
+  ```
+
+## Docker and releases
+
+Run the CLI anywhere via the container image (headless, no SDL needed):
+
+```sh
+docker build -t rednoise .
+docker run --rm -v "$PWD:/out" rednoise \
+    render /work/assets/cornell-box.obj -o /out/out.png --mode pathtraced --spp 128
+```
+
+Pushing a `v*` tag builds Linux/macOS/Windows binaries and attaches them to the
+GitHub Release. A vcpkg port and a Conan recipe live in `packaging/` (see
+[packaging/README.md](packaging/README.md)).
 
 ## Controls (interactive app)
 
