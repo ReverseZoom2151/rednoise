@@ -4,8 +4,10 @@
 
 // Point/Spot with radius > 0 is a flat (disk) area light; Volume samples a whole
 // sphere of radius `radius`; Rectangle samples a uAxis-by-vAxis rectangle for a
-// soft rectangular penumbra (e.g. a softbox / window light).
-enum class LightType { Point, Directional, Spot, Volume, Rectangle };
+// soft rectangular penumbra (e.g. a softbox / window light); Triangle samples the
+// triangle (position, position + uAxis, position + vAxis) for a soft triangular
+// penumbra (reuses the uAxis/vAxis fields as the two edge vectors).
+enum class LightType { Point, Directional, Spot, Volume, Rectangle, Triangle };
 
 // A light source. A point light with radius > 0 is an area light (soft shadows).
 struct Light {

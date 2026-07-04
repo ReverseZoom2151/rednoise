@@ -406,37 +406,79 @@ static float visibility(const Light &L, const glm::vec3 &point, const Scene &sce
 		}
 		return unoccluded / 9.0f;
 	}
+	if (L.type == LightType::Triangle) {
+		// A triangular emitter with corners position, position + uAxis, position + vAxis.
+		// Sample a fixed set of 9 barycentric weights (b1, b2) that all satisfy
+		// b1 + b2 <= 1 (a 3x3-style grid inside the triangle plus the centroid) so
+		// every sample lands on the emitter, giving a soft triangular penumbra.
+		static const glm::vec2 kBary[9] = {{0.0f, 0.0f}, // corner at position
+		                                   {1.0f, 0.0f}, // corner at position + uAxis
+		                                   {0.0f, 1.0f}, // corner at position + vAxis
+		                                   {0.5f, 0.0f}, // edge midpoints
+		                                   {0.0f, 0.5f},   {0.5f, 0.5f},
+		                                   {0.25f, 0.25f},                              // interior points
+		                                   {0.5f, 0.25f},  {1.0f / 3.0f, 1.0f / 3.0f}}; // centroid
+		int unoccluded = 0;
+		for (const glm::vec2 &b : kBary) {
+			glm::vec3 samplePos = L.position + L.uAxis * b.x + L.vAxis * b.y;
+			glm::vec3 to = samplePos - point;
+			float dist = glm::length(to);
+			if (!scene.occluded(point, to / dist, dist, ignoreIndex))
+				unoccluded++;
+		}
+		return unoccluded / 9.0f;
+	}
 	if (L.radius <= 0.0f) {
 		glm::vec3 to = L.position - point;
 		float dist = glm::length(to);
 		return scene.occluded(point, to / dist, dist, ignoreIndex) ? 0.0f : 1.0f;
 	}
 	if (L.type == LightType::Volume) {
-		// A 3D emitter: sample points throughout the light's sphere volume
-		// (fixed pattern in the unit ball) for a wide volumetric penumbra.
-		static const glm::vec3 kBall[14] = {{0, 0, 0},
-		                                    {0.9f, 0, 0},
-		                                    {-0.9f, 0, 0},
-		                                    {0, 0.9f, 0},
-		                                    {0, -0.9f, 0},
-		                                    {0, 0, 0.9f},
-		                                    {0, 0, -0.9f},
-		                                    {0.5f, 0.5f, 0.5f},
-		                                    {-0.5f, 0.5f, 0.5f},
-		                                    {0.5f, -0.5f, 0.5f},
-		                                    {-0.5f, -0.5f, 0.5f},
-		                                    {0.5f, 0.5f, -0.5f},
-		                                    {-0.5f, 0.5f, -0.5f},
-		                                    {0.5f, -0.5f, -0.5f}};
+		// A spherical emitter, sampled by SOLID ANGLE (cone importance sampling).
+		// The sphere of radius L.radius at L.position subtends a cone as seen from
+		// the shaded point; we shoot a fixed deterministic set of directions inside
+		// that cone (no RNG, so no noise). This is the Scratchapixel spherical-light
+		// cone-sampling technique and is more correct than sampling surface points.
+		const float kPi = 3.14159265358979323846f;
+		glm::vec3 toCentre = L.position - point;
+		float d = glm::length(toCentre);
+		glm::vec3 dir = toCentre / d; // cone axis: point -> sphere centre
+		float sinThetaMax = std::min(1.0f, L.radius / d);
+		// If the shaded point is inside the sphere the cone opens past a hemisphere,
+		// so treat the light as fully visible (surrounded by the emitter).
+		if (sinThetaMax >= 1.0f)
+			return 1.0f;
+		float cosThetaMax = std::sqrt(std::max(0.0f, 1.0f - sinThetaMax * sinThetaMax));
+		// Orthonormal basis about the cone axis.
+		glm::vec3 up = std::abs(dir.y) < 0.99f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+		glm::vec3 tangent = glm::normalize(glm::cross(up, dir));
+		glm::vec3 bitangent = glm::cross(dir, tangent);
+		// Fixed cone pattern: the axis plus two rings (inner and outer) of azimuths,
+		// giving 1 + 5 + 6 = 12 deterministic directions inside the cone. cosTheta is
+		// interpolated in [cosThetaMax, 1] so every direction stays within the cone.
+		static const float kRingCos[2] = {0.85f, 0.4f}; // fraction toward cosThetaMax per ring
+		static const int kRingCount[2] = {5, 6};
+		static const float kRingOffset[2] = {0.0f, 0.5f}; // stagger the outer ring azimuths
 		int unoccluded = 0;
-		for (const glm::vec3 &s : kBall) {
-			glm::vec3 samplePos = L.position + s * L.radius;
-			glm::vec3 to = samplePos - point;
-			float dist = glm::length(to);
-			if (!scene.occluded(point, to / dist, dist, ignoreIndex))
-				unoccluded++;
+		int total = 1;
+		// Central sample straight along the axis.
+		if (!scene.occluded(point, dir, d, ignoreIndex))
+			unoccluded++;
+		for (int ring = 0; ring < 2; ring++) {
+			float cosTheta = 1.0f - kRingCos[ring] * (1.0f - cosThetaMax);
+			float sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));
+			int count = kRingCount[ring];
+			for (int i = 0; i < count; i++) {
+				float phi = 2.0f * kPi * ((static_cast<float>(i) + kRingOffset[ring]) / static_cast<float>(count));
+				glm::vec3 sampleDir = dir * cosTheta + (tangent * std::cos(phi) + bitangent * std::sin(phi)) * sinTheta;
+				sampleDir = glm::normalize(sampleDir);
+				// Occlusion up to the sphere centre distance.
+				if (!scene.occluded(point, sampleDir, d, ignoreIndex))
+					unoccluded++;
+				total++;
+			}
 		}
-		return unoccluded / 14.0f;
+		return static_cast<float>(unoccluded) / static_cast<float>(total);
 	}
 	static const glm::vec2 kSamples[9] = {{0, 0},       {1, 0},        {-1, 0},       {0, 1},        {0, -1},
 	                                      {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
