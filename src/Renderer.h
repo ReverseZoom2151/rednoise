@@ -49,9 +49,12 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 // illumination (colour bleeding), soft shadows, and anti-aliasing together.
 // aperture > 0 enables depth of field focused at `focusDistance`; a non-zero
 // cameraMotion adds motion blur along that vector.
+// apertureBlades shapes the depth-of-field bokeh: 0/<3 = round lens, >=3 = a
+// regular-polygon aperture (5 = pentagon, 6 = hexagon, ...).
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples = 32,
                       const std::vector<Light> &lights = {}, float aperture = 0.0f, float focusDistance = 4.0f,
-                      const glm::vec3 &cameraMotion = glm::vec3(0.0f), const Primitives &prims = {});
+                      const glm::vec3 &cameraMotion = glm::vec3(0.0f), const Primitives &prims = {},
+                      int apertureBlades = 0);
 
 // Photon mapping: emit `numPhotons` from the light (reflecting/refracting through
 // mirrors and glass, which focuses caustics), then gather them for indirect

@@ -939,9 +939,27 @@ void renderVolumetric(const std::vector<ModelTriangle> &model, const Camera &cam
 	}
 }
 
+// Sample a point in a unit lens aperture: a disk when blades < 3, else a regular
+// polygon with `blades` sides (shaped bokeh). u1,u2 are uniform in [0,1).
+static glm::vec2 sampleAperture(int blades, float u1, float u2) {
+	if (blades < 3) {
+		float ang = 2.0f * 3.14159265f * u1, rad = std::sqrt(u2);
+		return glm::vec2(std::cos(ang), std::sin(ang)) * rad;
+	}
+	int wedge = std::min(blades - 1, static_cast<int>(u1 * blades)); // pick a triangular wedge
+	float a0 = 2.0f * 3.14159265f * wedge / blades, a1 = 2.0f * 3.14159265f * (wedge + 1) / blades;
+	glm::vec2 v0(std::cos(a0), std::sin(a0)), v1(std::cos(a1), std::sin(a1));
+	float s = u1 * blades - wedge, t = u2; // uniform in the wedge triangle (origin, v0, v1)
+	if (s + t > 1.0f) {
+		s = 1.0f - s;
+		t = 1.0f - t;
+	}
+	return v0 * s + v1 * t;
+}
+
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
                       const std::vector<Light> &lights, float aperture, float focusDistance,
-                      const glm::vec3 &cameraMotion, const Primitives &prims) {
+                      const glm::vec3 &cameraMotion, const Primitives &prims, int apertureBlades) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -975,11 +993,10 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 				// Depth of field: sample a lens disk and re-aim at the focal point.
 				if (aperture > 0.0f && !camera.orthographic) {
 					glm::vec3 focalPoint = camPos + direction * focusDistance;
-					float ang = 2.0f * 3.14159265f * U(rng);
-					float rad = aperture * std::sqrt(U(rng));
+					glm::vec2 lens = sampleAperture(apertureBlades, U(rng), U(rng)) * aperture; // shaped bokeh
 					glm::vec3 right = camera.orientation[0];
 					glm::vec3 up = camera.orientation[1];
-					origin = camPos + (right * std::cos(ang) + up * std::sin(ang)) * rad;
+					origin = camPos + (right * lens.x + up * lens.y);
 					direction = glm::normalize(focalPoint - origin);
 				}
 				sum += pathTrace(origin, direction, scene, used, maxDepth, rng);
