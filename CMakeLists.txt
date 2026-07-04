@@ -59,6 +59,7 @@ set(ENGINE_SOURCES
         src/Radiosity.cpp
         src/BDPT.cpp
         src/Metropolis.cpp
+        src/Ocean.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
@@ -97,6 +98,11 @@ if (BUILD_HEADLESS)
     add_executable(animate tools/animate.cpp ${ENGINE_SOURCES})
     target_include_directories(animate PRIVATE framework third_party src)
     link_openmp(animate)
+
+    # Animated Gerstner-wave ocean to a PPM frame sequence.
+    add_executable(render_ocean tools/render_ocean.cpp ${ENGINE_SOURCES})
+    target_include_directories(render_ocean PRIVATE framework third_party src)
+    link_openmp(render_ocean)
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------

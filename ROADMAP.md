@@ -131,7 +131,7 @@ fully-shaded ray tracer and beyond.
 ## Moonshots (graded 100% in the unit's gallery)
 
 - Real-time GPU path tracer with reflection + refraction.
-- Physically-based ocean-water surface with photon-mapped caustics.
+- [done] Physically-based ocean-water surface (Gerstner waves, glass material, photon caustics).
 - [done] Physically-based rendering (PBR) material model (metallic/roughness).
 
 ---
