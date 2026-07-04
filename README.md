@@ -12,6 +12,53 @@ Everything is verified end to end: the SDL-free engine is unit-tested and
 rendered headlessly in CI, which uploads the resulting images as build
 artifacts.
 
+## Gallery
+
+All images below are output from this renderer (reproduce them with the showcase
+scenes in `tools/`).
+
+<table>
+<tr>
+<td align="center"><img src="gallery/01_raytraced.png" width="260"><br><sub><b>Ray tracer</b>: mirror, glass, marble, bump, soft shadows</sub></td>
+<td align="center"><img src="gallery/02_pathtraced_gi.png" width="260"><br><sub><b>Path tracer</b>: global illumination, colour bleeding</sub></td>
+<td align="center"><img src="gallery/03_photon_caustics.png" width="260"><br><sub><b>Photon mapping</b>: caustics through the glass box</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="gallery/04_dispersion.png" width="260"><br><sub><b>Spectral dispersion</b>: a prism splits white light</sub></td>
+<td align="center"><img src="gallery/05_pbr_metals.png" width="260"><br><sub><b>PBR metals</b>: metallic / roughness (gold, chrome, copper)</sub></td>
+<td align="center"><img src="gallery/06_light_shafts.png" width="260"><br><sub><b>Participating media</b>: volumetric light shafts</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="gallery/07_emissive.png" width="260"><br><sub><b>Emissive geometry</b>: a glowing sphere lights the room</sub></td>
+<td align="center"><img src="gallery/08_normal_map.png" width="260"><br><sub><b>Normal mapping</b>: tangent-space relief from a texture</sub></td>
+<td align="center"><img src="gallery/09_primitives.png" width="260"><br><sub><b>Analytic primitives</b>: sphere, plane, ellipsoid, cylinder, cone</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="gallery/10_ocean.png" width="260"><br><sub><b>Gerstner ocean</b>: glass water with Fresnel reflection</sub></td>
+<td align="center"><img src="gallery/11_disco_ball.png" width="260"><br><sub><b>Disco ball</b>: a faceted mirror sphere</sub></td>
+<td align="center"><img src="gallery/12_clouds.png" width="260"><br><sub><b>Volumetric clouds</b>: fractal density raymarch</sub></td>
+</tr>
+</table>
+
+## About
+
+RedNoise began as the first milestone of the University of Bristol COMS30020
+Computer Graphics unit, where "RedNoise" is literally a window full of random red
+pixels. From that starting point it grew, feature by feature, into a renderer
+that draws the Cornell box essentially every way the field knows how: a
+rasteriser, a Whitted ray tracer, a Monte-Carlo path tracer, a photon mapper,
+classic and progressive radiosity, bidirectional path tracing, Metropolis light
+transport, and a real-time OpenCL GPU path tracer.
+
+It is the union of four reference course implementations plus more: every
+technique taught or demonstrated across those units (rasterisation, all the
+global-illumination methods, PBR materials, sub-surface scattering, participating
+media, mipmapping, stencil shadows, the meshing/decimation toolkit, analytic
+quadrics, spectral and Gerstner oceans, volumetric clouds, and the acceleration
+structures) is implemented here, then packaged as an installable library with a
+stable C ABI. Each feature was verified by actually looking at a render and by
+unit tests, and the whole thing is exercised in CI on every push.
+
 ## Features
 
 Rendering modes:
