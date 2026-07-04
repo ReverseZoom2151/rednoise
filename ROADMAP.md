@@ -18,9 +18,14 @@ gallery) · `CG` = Computergraphics-master · `RT` = Raytracer_Bristol.
 - [done] Interpolation, gradients, DDA lines, stroked/filled/random triangles.
 - [done] Affine texture-mapped triangles.
 - [done] OBJ geometry + MTL material-colour loading (`mtllib`/`usemtl`).
+- [done] Perspective camera: projection, lookAt, orbit, translate, pitch/yaw.
+- [done] Three render modes: wireframe, z-buffered rasteriser, flat raytrace
+  (ray-triangle closest-hit). The Cornell box renders.
+- [done] SDL-free `Canvas` + headless PPM renderer (`render_headless`); CI
+  renders the box on every push and uploads the images as artifacts.
 
-The geometry is parsed but not yet drawn in 3D. Everything below is the path from
-"loads the Cornell box" to "renders it, and then some."
+The Cornell box now renders in 3D. Everything below builds on that toward a
+fully-shaded ray tracer and beyond.
 
 ---
 
@@ -28,28 +33,28 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| [next] Perspective projection | Project `ModelTriangle` vertices through a pinhole camera to canvas points (`u = -f*x/z + W/2`). First 3D image. | ● | 20, 15, CG |
-| [next] Wireframe render mode | Draw projected triangle edges. Immediate visual payoff, minimal maths. | ● | 20, 15 |
-| Filled + depth (z-)buffer | Rasterise filled triangles with a per-pixel `1/z` buffer for correct occlusion. | ●● | 20, 15, CG |
-| Perspective-correct interpolation | Interpolate attributes in `1/z` space (needed before textures/lighting look right). | ●● | 15, CG |
+| [done] Perspective projection | Project `ModelTriangle` vertices through a pinhole camera to canvas points (`u = -f*x/z + W/2`). First 3D image. | ● | 20, 15, CG |
+| [done] Wireframe render mode | Draw projected triangle edges. Immediate visual payoff, minimal maths. | ● | 20, 15 |
+| [done] Filled + depth (z-)buffer | Rasterise filled triangles with a per-pixel `1/z` buffer for correct occlusion. | ●● | 20, 15, CG |
+| [done] Perspective-correct interpolation | Interpolate attributes in `1/z` space (needed before textures/lighting look right). | ●● | 15, CG |
 
 ## Phase 2 - Camera
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| Translate + rotate | WASD/arrows move; X/Y/Z rotation matrices on position + orientation. | ● | 20, 15 |
-| lookAt | Build an orthonormal basis aimed at a target point. | ● | 20, 15, RT, CG |
-| Orbit | Rotate the camera around the scene each frame, re-aiming via lookAt. | ● | 20 |
+| [done] Translate + rotate | WASD/arrows move; X/Y/Z rotation matrices on position + orientation. | ● | 20, 15 |
+| [done] lookAt | Build an orthonormal basis aimed at a target point. | ● | 20, 15, RT, CG |
+| [done] Orbit | Rotate the camera around the scene each frame, re-aiming via lookAt. | ● | 20 |
 | Pitch / mouse-look | Up-down tilt and `SDL_GetRelativeMouseState` free-look. | ●● | 15 |
 
 ## Phase 3 - Core raytracer
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| Ray-triangle intersection | Moller-Trumbore / matrix-inverse barycentric solve; closest-hit search. | ●● | 20, 15, CG, RT |
+| [done] Ray-triangle intersection | Moller-Trumbore / matrix-inverse barycentric solve; closest-hit search. | ●● | 20, 15, CG, RT |
 | Hard shadows | Shadow ray to the light; occlusion darkens the pixel. | ●● | 20, 15, CG, RT |
 | Diffuse + ambient | Inverse-square proximity, angle-of-incidence Lambert, ambient floor. | ●● | 20, 15, CG, RT |
-| Render-mode toggle | Switch wireframe / rasterise / raytrace on number keys. | ● | 20 |
+| [done] Render-mode toggle | Switch wireframe / rasterise / raytrace on number keys. | ● | 20 |
 
 ## Phase 4 - Shading models
 

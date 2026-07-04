@@ -16,22 +16,29 @@ jobs:
       - name: Check formatting
         run: |
           clang-format --version
-          find framework src tests \( -name '*.cpp' -o -name '*.h' \) -print0 \
+          find framework src tests tools \( -name '*.cpp' -o -name '*.h' \) -print0 \
             | xargs -0 clang-format --dry-run --Werror
 
   tests:
-    name: unit tests (no SDL)
+    name: tests + headless render (no SDL)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y cmake clang
-      - name: Configure (tests only)
-        run: cmake -B build -S . -DBUILD_APP=OFF -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-      - name: Build tests
-        run: cmake --build build --target rednoise_tests
-      - name: Run tests
+      - name: Configure (no app, so no SDL3 needed)
+        run: cmake -B build -S . -DBUILD_APP=OFF -DCMAKE_BUILD_TYPE=Debug
+      - name: Build tests + headless renderer
+        run: cmake --build build
+      - name: Run unit tests
         run: ctest --test-dir build --output-on-failure
+      - name: Render the Cornell box headlessly
+        run: ./build/render_headless assets/cornell-box.obj render
+      - name: Upload rendered images
+        uses: actions/upload-artifact@v4
+        with:
+          name: renders
+          path: render-*.ppm
 
   app-syntax:
     name: app compile check (SDL3 headers)

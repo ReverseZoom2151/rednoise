@@ -77,25 +77,40 @@ make production # optimised build
 make clean
 ```
 
+### Headless rendering (no SDL3)
+
+The renderer also builds without a window, writing the frame straight to PPM.
+This is what CI runs, and it needs no SDL3:
+
+```sh
+cmake -B build -S . -DBUILD_APP=OFF
+cmake --build build
+./build/render_headless assets/cornell-box.obj render
+# writes render-wireframe.ppm, render-rasterised.ppm, render-raytraced.ppm
+```
+
 ## Controls
 
 | Input | Action |
 |-------|--------|
-| `u` | Draw a random stroked triangle |
-| `f` | Draw a random filled triangle |
-| Arrow keys | Print direction (camera hooks, reserved) |
-| Mouse click | Save the frame to `output.ppm` and `output.bmp` |
+| `1` / `2` / `3` | Wireframe / rasterised / raytraced render mode |
+| `W` `A` `S` `D` `Q` `E` | Move the camera (x, y, z) |
+| Arrow keys | Rotate the camera (pan / tilt) |
+| `L` | Aim the camera at the scene centre (lookAt) |
+| `O` | Toggle orbit |
+| `R` | Reset the camera |
+| Mouse click | Save the frame to `output.ppm` |
 | `Esc` | Quit |
 
 ## Status & roadmap
 
-The framework, primitives, texture mapping, and OBJ/MTL loading are in place; the
-Cornell box is parsed (with materials) at startup. Projecting and rasterising that
-3D geometry (perspective projection, a depth buffer, a movable camera, and on
-toward a ray tracer with shadows and lighting) is the intended next step.
+The Cornell box now renders in 3D three ways: wireframe, a z-buffered rasteriser,
+and a flat ray tracer (ray-triangle closest-hit), all driven by a movable
+perspective camera. Next up is shading and lighting: hard shadows, diffuse and
+ambient light, then specular/Gouraud/Phong.
 
-See [ROADMAP.md](ROADMAP.md) for the full phased build plan, from a first
-wireframe render up through Phong shading, reflection/refraction, soft shadows,
+See [ROADMAP.md](ROADMAP.md) for the full phased build plan, from the current
+renderer up through Phong shading, reflection/refraction, soft shadows,
 acceleration structures, and global illumination.
 
 ## Credits

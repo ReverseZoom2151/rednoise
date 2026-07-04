@@ -24,22 +24,22 @@ static float edgeFunction(const CanvasPoint &a, const CanvasPoint &b, float px, 
 	return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
 }
 
-void renderWireframe(const std::vector<ModelTriangle> &model, const Camera &camera, DrawingWindow &window) {
-	window.clearPixels();
+void renderWireframe(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
+	canvas.clearPixels();
 	for (const ModelTriangle &tri : model) {
 		CanvasPoint p[3];
 		if (!projectTriangle(tri, camera, p))
 			continue;
-		drawLine(p[0], p[1], tri.colour, window);
-		drawLine(p[1], p[2], tri.colour, window);
-		drawLine(p[2], p[0], tri.colour, window);
+		drawLine(p[0], p[1], tri.colour, canvas);
+		drawLine(p[1], p[2], tri.colour, canvas);
+		drawLine(p[2], p[0], tri.colour, canvas);
 	}
 }
 
-void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &camera, DrawingWindow &window) {
-	window.clearPixels();
-	int W = static_cast<int>(window.width);
-	int H = static_cast<int>(window.height);
+void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
 	// Inverse-depth buffer: 0 is infinitely far, larger is nearer.
 	std::vector<float> depthBuffer(static_cast<size_t>(W) * H, 0.0f);
 
@@ -75,17 +75,17 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 				size_t idx = static_cast<size_t>(y) * W + x;
 				if (invDepth > depthBuffer[idx]) {
 					depthBuffer[idx] = invDepth;
-					window.setPixelColour(x, y, colour);
+					canvas.setPixelColour(x, y, colour);
 				}
 			}
 		}
 	}
 }
 
-void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, DrawingWindow &window) {
-	window.clearPixels();
-	int W = static_cast<int>(window.width);
-	int H = static_cast<int>(window.height);
+void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 
 	for (int y = 0; y < H; y++) {
@@ -96,7 +96,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
 			RayTriangleIntersection hit = getClosestIntersection(camera.position, direction, model);
 			if (hit.hit)
-				window.setPixelColour(x, y, hit.intersectedTriangle.colour.toUint32());
+				canvas.setPixelColour(x, y, hit.intersectedTriangle.colour.toUint32());
 		}
 	}
 }

@@ -31,6 +31,13 @@ void DrawingWindow::renderFrame() {
 	SDL_RenderPresent(renderer);
 }
 
+void DrawingWindow::renderFrame(const Canvas &canvas) {
+	SDL_UpdateTexture(texture, nullptr, canvas.pixels.data(), width * sizeof(uint32_t));
+	SDL_RenderClear(renderer);
+	SDL_RenderTexture(renderer, texture, nullptr, nullptr);
+	SDL_RenderPresent(renderer);
+}
+
 void DrawingWindow::saveBMP(const std::string &filename) const {
 	SDL_Surface *surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_ARGB8888, (void *)pixelBuffer.data(),
 	                                             width * sizeof(uint32_t));

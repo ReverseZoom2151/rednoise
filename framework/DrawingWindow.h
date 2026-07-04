@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Canvas.h"
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -22,6 +23,7 @@ public:
 	DrawingWindow();
 	DrawingWindow(int w, int h, bool fullscreen);
 	void renderFrame();
+	void renderFrame(const Canvas &canvas); // present an externally-drawn canvas
 	void savePPM(const std::string &filename) const;
 	void saveBMP(const std::string &filename) const;
 	bool pollForInputEvents(SDL_Event &event);

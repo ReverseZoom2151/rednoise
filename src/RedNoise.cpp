@@ -1,7 +1,7 @@
 #include "Camera.h"
-#include "Drawing.h"
 #include "ObjLoader.h"
 #include "Renderer.h"
+#include <Canvas.h>
 #include <DrawingWindow.h>
 #include <ModelTriangle.h>
 #include <glm/glm.hpp>
@@ -15,6 +15,7 @@ enum class RenderMode { Wireframe, Rasterised, Raytraced };
 
 static RenderMode renderMode = RenderMode::Rasterised;
 static Camera camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
+static Canvas canvas(WIDTH, HEIGHT);
 static bool orbiting = false;
 
 static const std::vector<ModelTriangle> &scene() {
@@ -27,24 +28,24 @@ static const std::vector<ModelTriangle> &scene() {
 	return triangles;
 }
 
-void draw(DrawingWindow &window) {
+void draw() {
 	const std::vector<ModelTriangle> &model = scene();
 	if (orbiting)
 		camera.orbitY(0.02f, glm::vec3(0.0f, 0.0f, 0.0f));
 	switch (renderMode) {
 	case RenderMode::Wireframe:
-		renderWireframe(model, camera, window);
+		renderWireframe(model, camera, canvas);
 		break;
 	case RenderMode::Rasterised:
-		renderRasterised(model, camera, window);
+		renderRasterised(model, camera, canvas);
 		break;
 	case RenderMode::Raytraced:
-		renderRaytraced(model, camera, window);
+		renderRaytraced(model, camera, canvas);
 		break;
 	}
 }
 
-void handleEvent(SDL_Event event, DrawingWindow &window) {
+void handleEvent(SDL_Event event) {
 	if (event.type == SDL_EVENT_KEY_DOWN) {
 		float step = 0.1f;
 		switch (event.key.key) {
@@ -89,6 +90,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 			break;
 		case SDLK_R:
 			camera = Camera(WIDTH, HEIGHT, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
+			camera.lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 			orbiting = false;
 			break;
 		// Render modes.
@@ -108,8 +110,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 			break;
 		}
 	} else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-		window.savePPM("output.ppm");
-		window.saveBMP("output.bmp");
+		canvas.savePPM("output.ppm");
+		std::cout << "saved output.ppm" << std::endl;
 	}
 }
 
@@ -120,10 +122,10 @@ int main(int argc, char *argv[]) {
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event))
-			handleEvent(event, window);
-		draw(window);
+			handleEvent(event);
+		draw();
 		// Need to render the frame at the end, or nothing actually gets shown on the screen!
-		window.renderFrame();
+		window.renderFrame(canvas);
 	}
 	return 0;
 }
