@@ -1,4 +1,18 @@
-# RedNoise: a software renderer
+<div align="center">
+
+# RedNoise
+
+**A from-scratch C++23 software renderer: the Cornell box, rendered every way there is.**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/ReverseZoom2151/rednoise/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/ReverseZoom2151/rednoise/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?style=flat-square&logo=cplusplus&logoColor=white)
+![CMake](https://img.shields.io/badge/CMake-3.24%2B-064F8C?style=flat-square&logo=cmake&logoColor=white)
+![GPU: OpenCL](https://img.shields.io/badge/GPU-OpenCL-ED1C24?style=flat-square)
+
+<img src="gallery/01_raytraced.png" width="440">
+
+</div>
 
 A CPU software renderer written in C++23. It draws into a plain pixel buffer (no
 GPU, no OpenGL) and, for the interactive app, presents it with SDL3; it uses glm
@@ -122,19 +136,28 @@ including the GPU path tracer and the ocean-water simulation, is built.
 
 ## Dependencies
 
+<div align="center">
+<img src="assets/logos/cpp.png" height="34" alt="C++23">&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="assets/logos/cmake.png" height="34" alt="CMake">&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="assets/logos/sdl.png" height="30" alt="SDL3">&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="assets/logos/opencl.png" height="30" alt="OpenCL">&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="assets/logos/glm.png" height="30" alt="glm">&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="assets/logos/openmp.png" height="30" alt="OpenMP">
+</div>
+
 No dependency version is pinned, and there is nothing to install by hand. The
 default is **find-first, then fetch**: for each dependency the build looks for a
 system package first (instant if you already have it) and only fetches the latest
 from upstream when it is missing. So `cmake -B build && cmake --build build` just
 works whether or not you have the libraries installed.
 
-| Dependency | How it's resolved | Notes |
-|------------|-------------------|-------|
-| [glm](https://github.com/g-truc/glm) | System package, else fetched | Header-only; `third_party/glm` is the offline fallback |
-| [SDL3](https://www.libsdl.org) | System package (vcpkg / distro), else fetched + built | Only the interactive app |
-| [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-ICD-Loader) | System SDK (vendor / CUDA), else fetched Khronos headers + loader | Only the GPU path tracer |
-| OpenCL runtime | GPU driver | Cannot be fetched: it is the vendor's driver; keep the driver current |
-| [OpenMP](https://www.openmp.org) | Compiler | Cannot be fetched: it is a compiler feature (libgomp/libomp/vcomp); optional |
+| | Dependency | How it's resolved | Notes |
+|-|------------|-------------------|-------|
+| <img src="assets/logos/glm.png" height="18"> | [glm](https://github.com/g-truc/glm) | System package, else fetched | Header-only; `third_party/glm` is the offline fallback |
+| <img src="assets/logos/sdl.png" height="18"> | [SDL3](https://www.libsdl.org) | System package (vcpkg / distro), else fetched + built | Only the interactive app |
+| <img src="assets/logos/opencl.png" height="18"> | [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-ICD-Loader) | System SDK (vendor / CUDA), else fetched Khronos headers + loader | Only the GPU path tracer |
+| <img src="assets/logos/opencl.png" height="18"> | OpenCL runtime | GPU driver | Cannot be fetched: it is the vendor's driver; keep the driver current |
+| <img src="assets/logos/openmp.png" height="18"> | [OpenMP](https://www.openmp.org) | Compiler | Cannot be fetched: it is a compiler feature (libgomp/libomp/vcomp); optional |
 
 Knobs, if you want to override the default:
 
