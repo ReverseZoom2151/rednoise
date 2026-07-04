@@ -13,7 +13,7 @@
 #   ctest --test-dir build --output-on-failure
 #   ./build/render_headless     # writes render-*.ppm
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.24) # FetchContent FIND_PACKAGE_ARGS (find-first-then-fetch)
 project(RedNoise CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -42,11 +42,15 @@ else ()
             -Wno-unused-parameter -Wno-unused-variable -Wno-ignored-attributes)
 endif ()
 
-# --- glm (header-only vector maths) -----------------------------------------
-# No pinned version: by default we fetch the latest glm from upstream at
-# configure time, so updates flow in automatically. Set FETCH_DEPENDENCIES=OFF
-# to use the vendored offline copy in third_party/glm instead (e.g. no network).
-option(FETCH_DEPENDENCIES "Fetch the latest glm from upstream (else use vendored third_party/glm)" ON)
+# --- Dependencies: find-first, then fetch -----------------------------------
+# The zero-effort default: for each dependency that can be built from source we
+# first look for a system package (instant if you already have it) and only fetch
+# the latest from upstream when it is missing. No version is pinned. Knobs:
+#   -DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER  force-fetch the newest, ignore system
+#   -DFETCH_DEPENDENCIES=OFF                     never fetch (system/vendored only, offline)
+option(FETCH_DEPENDENCIES "Allow fetching missing deps from upstream (OFF = system + vendored only)" ON)
+
+# --- glm (header-only vector maths) ---
 add_library(glm_headers INTERFACE)
 if (FETCH_DEPENDENCIES)
     include(FetchContent)
@@ -54,15 +58,16 @@ if (FETCH_DEPENDENCIES)
     set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(glm
             GIT_REPOSITORY https://github.com/g-truc/glm.git
-            GIT_TAG master # always the latest upstream
-            GIT_SHALLOW TRUE)
+            GIT_TAG master # latest upstream, used only if no system glm is found
+            GIT_SHALLOW TRUE
+            FIND_PACKAGE_ARGS NAMES glm)
     FetchContent_MakeAvailable(glm)
     if (TARGET glm::glm)
         target_link_libraries(glm_headers INTERFACE glm::glm)
     elseif (TARGET glm)
         target_link_libraries(glm_headers INTERFACE glm)
     endif ()
-    message(STATUS "glm: fetching latest from upstream (FETCH_DEPENDENCIES=ON)")
+    message(STATUS "glm: system package if present, else fetched from upstream")
 else ()
     target_include_directories(glm_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
     message(STATUS "glm: using vendored third_party/glm (FETCH_DEPENDENCIES=OFF)")
@@ -107,12 +112,15 @@ if (BUILD_APP)
         set(SDL_TESTS OFF CACHE BOOL "" FORCE)
         set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
         set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+        # System SDL3 (vcpkg / package manager) if present - instant; else fetch
+        # and build the latest from source.
         FetchContent_Declare(SDL3
                 GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-                GIT_TAG main # latest upstream SDL3
-                GIT_SHALLOW TRUE)
+                GIT_TAG main # latest upstream SDL3, used only if no system SDL3 is found
+                GIT_SHALLOW TRUE
+                FIND_PACKAGE_ARGS CONFIG)
         FetchContent_MakeAvailable(SDL3)
-        message(STATUS "SDL3: fetching latest from upstream (built from source)")
+        message(STATUS "SDL3: system package if present, else fetched + built from source")
     else ()
         find_package(SDL3 REQUIRED CONFIG)
     endif ()
@@ -164,11 +172,16 @@ endif ()
 set(OPENCL_TARGET_VERSION 120 CACHE STRING "OpenCL API level to target (120 = broadest, 300 = require 3.0)")
 if (BUILD_GPU)
     set(_ocl_ok FALSE)
-    if (FETCH_DEPENDENCIES)
-        # Fetch and build the latest Khronos OpenCL SDK (headers + ICD loader).
-        # The loader still dispatches at runtime to the installed vendor driver -
-        # that runtime is the one piece that cannot be fetched (it ships with the
-        # GPU driver).
+    # System OpenCL SDK (a vendor SDK / CUDA) if present - instant; otherwise
+    # fetch and build the latest Khronos headers + ICD loader. The loader always
+    # dispatches at runtime to the installed vendor driver - that runtime is the
+    # one piece that cannot be fetched (it ships with the GPU driver).
+    find_package(OpenCL)
+    if (OpenCL_FOUND)
+        message(STATUS "OpenCL: using system SDK ${OpenCL_VERSION_STRING}")
+        set(_ocl_libs OpenCL::OpenCL)
+        set(_ocl_ok TRUE)
+    elseif (FETCH_DEPENDENCIES)
         include(FetchContent)
         FetchContent_Declare(OpenCLHeaders
                 GIT_REPOSITORY https://github.com/KhronosGroup/OpenCL-Headers.git
@@ -181,14 +194,7 @@ if (BUILD_GPU)
         FetchContent_MakeAvailable(OpenCLICDLoader)
         set(_ocl_libs OpenCL OpenCL::Headers)
         set(_ocl_ok TRUE)
-        message(STATUS "OpenCL: fetching latest Khronos headers + ICD loader from upstream")
-    else ()
-        find_package(OpenCL)
-        if (OpenCL_FOUND)
-            message(STATUS "OpenCL SDK ${OpenCL_VERSION_STRING} found")
-            set(_ocl_libs OpenCL::OpenCL)
-            set(_ocl_ok TRUE)
-        endif ()
+        message(STATUS "OpenCL: no system SDK; fetched latest Khronos headers + ICD loader")
     endif ()
     if (_ocl_ok)
         message(STATUS "gpu_pathtracer: compiling to target OpenCL API ${OPENCL_TARGET_VERSION}")
