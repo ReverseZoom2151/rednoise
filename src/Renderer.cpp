@@ -19,37 +19,84 @@ static float edgeFunction(const CanvasPoint &a, const CanvasPoint &b, float px, 
 	return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
 }
 
-// Clip a triangle against the near plane in camera space, then project the
-// result to canvas points. Returns 0, 1, or 2 sub-triangles (a triangle
-// straddling the plane becomes a quad, fan-split into two). This replaces the
-// old "drop the whole triangle if any vertex is behind the camera".
-static std::vector<std::array<CanvasPoint, 3>> clipAndProject(const ModelTriangle &tri, const Camera &camera) {
-	const float nearPlane = 0.1f;
-	glm::vec3 cam[3];
-	for (int i = 0; i < 3; i++)
-		cam[i] = camera.toCameraSpace(tri.vertices[i]);
-	auto inFront = [&](const glm::vec3 &v) { return -v.z > nearPlane; };
-
-	std::vector<glm::vec3> poly; // Sutherland-Hodgman against the near plane
-	for (int i = 0; i < 3; i++) {
-		const glm::vec3 &a = cam[i];
-		const glm::vec3 &b = cam[(i + 1) % 3];
-		bool ai = inFront(a), bi = inFront(b);
+// Sutherland-Hodgman clip a camera-space polygon against a z plane: keep the
+// side where z < zBound (keepLess) or z > zBound. Used for the near/far planes
+// (forward is -z, so "in front of near" is z < -near).
+static std::vector<glm::vec3> clipCameraZ(const std::vector<glm::vec3> &poly, float zBound, bool keepLess) {
+	std::vector<glm::vec3> out;
+	for (size_t i = 0; i < poly.size(); i++) {
+		const glm::vec3 &a = poly[i];
+		const glm::vec3 &b = poly[(i + 1) % poly.size()];
+		bool ai = keepLess ? a.z < zBound : a.z > zBound;
+		bool bi = keepLess ? b.z < zBound : b.z > zBound;
 		if (ai)
-			poly.push_back(a);
+			out.push_back(a);
 		if (ai != bi) {
-			float t = (-nearPlane - a.z) / (b.z - a.z);
-			poly.push_back(a + t * (b - a));
+			float t = (zBound - a.z) / (b.z - a.z);
+			out.push_back(a + t * (b - a));
 		}
 	}
+	return out;
+}
 
-	std::vector<std::array<CanvasPoint, 3>> result;
+// Clip a projected polygon against one screen edge (x or y, >= or <= bound),
+// interpolating inverse depth so the new vertices stay perspective-correct.
+static std::vector<CanvasPoint> clipScreenEdge(const std::vector<CanvasPoint> &poly, int axis, float bound,
+                                               bool keepGreater) {
+	std::vector<CanvasPoint> out;
+	auto coord = [&](const CanvasPoint &p) { return axis == 0 ? p.x : p.y; };
+	auto inside = [&](const CanvasPoint &p) { return keepGreater ? coord(p) >= bound : coord(p) <= bound; };
+	for (size_t i = 0; i < poly.size(); i++) {
+		const CanvasPoint &a = poly[i];
+		const CanvasPoint &b = poly[(i + 1) % poly.size()];
+		bool ai = inside(a), bi = inside(b);
+		if (ai)
+			out.push_back(a);
+		if (ai != bi) {
+			float t = (bound - coord(a)) / (coord(b) - coord(a));
+			CanvasPoint p;
+			p.x = a.x + t * (b.x - a.x);
+			p.y = a.y + t * (b.y - a.y);
+			float invDepth = 1.0f / a.depth + t * (1.0f / b.depth - 1.0f / a.depth);
+			p.depth = 1.0f / invDepth;
+			out.push_back(p);
+		}
+	}
+	return out;
+}
+
+// Full frustum clipping: clip a triangle against the near and far planes in
+// camera space, project, then clip against all four screen edges. Returns the
+// clipped polygon fan-split into triangles (empty if fully outside).
+static std::vector<std::array<CanvasPoint, 3>> clipAndProject(const ModelTriangle &tri, const Camera &camera, int W,
+                                                              int H) {
+	const float nearPlane = 0.1f;
+	const float farPlane = 1000.0f;
+	std::vector<glm::vec3> poly;
+	poly.reserve(3);
+	for (int i = 0; i < 3; i++)
+		poly.push_back(camera.toCameraSpace(tri.vertices[i]));
+
+	poly = clipCameraZ(poly, -nearPlane, true); // in front of the near plane
 	if (poly.size() < 3)
-		return result;
+		return {};
+	poly = clipCameraZ(poly, -farPlane, false); // nearer than the far plane
+	if (poly.size() < 3)
+		return {};
+
 	std::vector<CanvasPoint> proj;
 	proj.reserve(poly.size());
 	for (const glm::vec3 &v : poly)
 		proj.push_back(camera.projectCameraPoint(v));
+
+	proj = clipScreenEdge(proj, 0, 0.0f, true);                       // x >= 0
+	proj = clipScreenEdge(proj, 0, static_cast<float>(W - 1), false); // x <= W-1
+	proj = clipScreenEdge(proj, 1, 0.0f, true);                       // y >= 0
+	proj = clipScreenEdge(proj, 1, static_cast<float>(H - 1), false); // y <= H-1
+	if (proj.size() < 3)
+		return {};
+
+	std::vector<std::array<CanvasPoint, 3>> result;
 	for (size_t i = 1; i + 1 < proj.size(); i++)
 		result.push_back({proj[0], proj[i], proj[i + 1]});
 	return result;
@@ -89,8 +136,10 @@ static void fillTriangle(const CanvasPoint p[3], uint32_t colour, std::vector<fl
 
 void renderWireframe(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas) {
 	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
 	for (const ModelTriangle &tri : model) {
-		for (const std::array<CanvasPoint, 3> &p : clipAndProject(tri, camera)) {
+		for (const std::array<CanvasPoint, 3> &p : clipAndProject(tri, camera, W, H)) {
 			drawLine(p[0], p[1], tri.colour, canvas);
 			drawLine(p[1], p[2], tri.colour, canvas);
 			drawLine(p[2], p[0], tri.colour, canvas);
@@ -106,7 +155,7 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 	std::vector<float> depthBuffer(static_cast<size_t>(W) * H, 0.0f); // inverse depth, 0 = far
 
 	for (const ModelTriangle &tri : model) {
-		for (const std::array<CanvasPoint, 3> &p : clipAndProject(tri, camera)) {
+		for (const std::array<CanvasPoint, 3> &p : clipAndProject(tri, camera, W, H)) {
 			// Backface culling: a back-facing triangle projects with negative
 			// screen-space winding. Optional (needs consistent winding).
 			if (backfaceCull && edgeFunction(p[0], p[1], p[2].x, p[2].y) < 0.0f)

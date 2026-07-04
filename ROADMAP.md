@@ -145,7 +145,7 @@ that were not in the original plan.
 | --- | --- | --- |
 | Analytic planes + quadrics (ellipsoid/cylinder/cone) | Raytracer_Bristol | [done] |
 | Bloom post-filter | COMS30115 gallery | [done] |
-| Full frustum clipping (all planes) | COMS30115 clipping lecture | pending |
+| [done] Full frustum clipping (all planes) | COMS30115 clipping lecture | done |
 | Volumetric 3D light source | COMS30115 gallery | pending |
 | Photon-map final gather | COMS30115 gallery | pending |
 | Named PBR material presets + camera roll | Raytracer_Bristol / COMS30020 | pending |
