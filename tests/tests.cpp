@@ -6,6 +6,8 @@
 #include "Geometry.h"
 #include "Interpolation.h"
 #include "ObjLoader.h"
+#include "Transform.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <Utils.h>
 #include <cmath>
 #include <glm/glm.hpp>
@@ -157,7 +159,27 @@ static void testBVH() {
 	CHECK(mismatches == 0);
 }
 
+static void testTransform() {
+	std::vector<ModelTriangle> mesh;
+	mesh.push_back(ModelTriangle(glm::vec3(0, 0, 0), glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), Colour(255, 0, 0)));
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(2, 3, 4));
+	std::vector<ModelTriangle> moved = transformModel(mesh, m);
+	CHECK(moved.size() == 1);
+	CHECK(nearly(moved[0].vertices[0].x, 2.0f) && nearly(moved[0].vertices[0].y, 3.0f));
+	CHECK(nearly(moved[0].vertices[1].x, 3.0f)); // (1,0,0) -> (3,3,4)
+	// Instancing appends.
+	std::vector<ModelTriangle> scene;
+	appendInstance(scene, mesh, glm::mat4(1.0f));
+	appendInstance(scene, mesh, m);
+	CHECK(scene.size() == 2);
+	// LOD picks by distance.
+	std::vector<ModelTriangle> hi = mesh, lo;
+	CHECK(selectLOD(1.0f, 5.0f, hi, lo).size() == 1);
+	CHECK(selectLOD(9.0f, 5.0f, hi, lo).size() == 0);
+}
+
 int main() {
+	testTransform();
 	testInterpolateSingleFloats();
 	testInterpolateThreeElementValues();
 	testInterpolation();

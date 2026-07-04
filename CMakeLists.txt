@@ -52,6 +52,7 @@ set(ENGINE_SOURCES
         src/Renderer.cpp
         src/Noise.cpp
         src/BVH.cpp
+        src/Transform.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
