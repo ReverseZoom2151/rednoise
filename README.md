@@ -41,7 +41,7 @@ Cornell scene) from the COMS30020 coursework with our engine.
 </tr>
 <tr>
 <td align="center"><img src="gallery/13_bunny.png" width="260"><br><sub><b>Stanford bunny</b>: a classic mesh in the Cornell box</sub></td>
-<td align="center"><img src="gallery/14_logo.png" width="260"><br><sub><b>Bristol logo</b>: the course logo asset as polished gold metal</sub></td>
+<td align="center"><img src="gallery/14_logo.png" width="260"><br><sub><b>Bristol logo</b>: the reference asset with its original texture</sub></td>
 <td align="center"><img src="gallery/15_cornell_shapes.png" width="260"><br><sub><b>Rich Cornell scene</b>: bunny, spheres and logo (704 triangles)</sub></td>
 </tr>
 </table>
