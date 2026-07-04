@@ -560,13 +560,13 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
-                     ShadingModel shading, const std::vector<Light> &lights, const std::vector<Sphere> &spheres) {
+                     ShadingModel shading, const std::vector<Light> &lights, const Primitives &prims) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const int maxDepth = 4;
-	Scene scene(model, spheres); // triangles (BVH) + analytic spheres
+	Scene scene(model, prims); // triangles (BVH) + analytic primitives
 
 	// Default to one soft (area) light so shadows have a penumbra out of the box.
 	std::vector<Light> used = lights;
@@ -595,13 +595,13 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
                       const std::vector<Light> &lights, float aperture, float focusDistance,
-                      const glm::vec3 &cameraMotion, const std::vector<Sphere> &spheres) {
+                      const glm::vec3 &cameraMotion, const Primitives &prims) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const int maxDepth = 4;
-	Scene scene(model, spheres);
+	Scene scene(model, prims);
 
 	std::vector<Light> used = lights;
 	if (used.empty()) {
@@ -753,13 +753,13 @@ static glm::vec3 photonShade(const glm::vec3 &origin, const glm::vec3 &direction
 }
 
 void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int numPhotons,
-                        const std::vector<Light> &lights, const std::vector<Sphere> &spheres) {
+                        const std::vector<Light> &lights, const Primitives &prims) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const float radius = 0.25f;
-	Scene scene(model, spheres);
+	Scene scene(model, prims);
 
 	std::vector<Light> used = lights;
 	if (used.empty()) {
