@@ -376,10 +376,12 @@ the Python and Rust bindings below wrap.
 
 ## Language bindings
 
-Ready-to-use bindings wrap the C ABI; each links the installed `rednoise` library
-(see the binding's README for building it):
+The C ABI is wrapped by installable packages for three ecosystems. Each builds
+the engine itself (no prebuilt library to fetch): the Python wheel bundles the
+shared library, the Rust crate compiles the engine from source, and the npm
+package is a WebAssembly build.
 
-- **Python** (`bindings/python`) - pure ctypes, no compiled extension:
+- **Python** (`bindings/python`) - `pip install rednoise`:
 
   ```python
   import rednoise
@@ -387,12 +389,23 @@ Ready-to-use bindings wrap the C ABI; each links the installed `rednoise` librar
   scene.render(mode="pathtraced", width=640, height=480, samples=128).save("cornell.png")
   ```
 
-- **Rust** (`bindings/rust`) - a safe crate:
+- **Rust** (`bindings/rust`) - `cargo add rednoise`:
 
   ```rust
   let scene = rednoise::Scene::load_obj("assets/cornell-box.obj", 0.35)?;
   scene.render(rednoise::Mode::Pathtraced, 640, 480, 4.0, 128)?.save_png("cornell.png")?;
   ```
+
+- **JavaScript / WASM** (`bindings/wasm`) - `npm install rednoise` (browser or Node):
+
+  ```js
+  import { createRenderer } from "rednoise";
+  const rn = await createRenderer();
+  const rgba = rn.render({ obj: objText, mode: "pathtraced", width: 640, height: 480 });
+  ```
+
+Publishing to PyPI, crates.io and npm is automated on release; see
+[PUBLISHING.md](PUBLISHING.md) for the one-time token/trusted-publisher setup.
 
 ## Docker and releases
 
