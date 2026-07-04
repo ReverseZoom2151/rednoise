@@ -33,3 +33,11 @@ renderer on top of SDL.
 Linked at build time (not vendored). https://www.libsdl.org — zlib license.
 Resolved via CMake `find_package(SDL3 CONFIG)` / the `SDL3::SDL3` target, or
 `pkg-config sdl3` for the Makefile build.
+
+## stb_image_write
+
+- Location: `third_party/stb/stb_image_write.h`
+- Origin: https://github.com/nothings/stb (v1.16), by Sean Barrett.
+
+Single-header PNG/image writer, public domain (or MIT, at your option). Vendored
+and used by `Canvas::savePNG` and the C ABI `rn_save_png`.

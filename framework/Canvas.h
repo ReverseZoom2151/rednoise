@@ -18,4 +18,5 @@ public:
 	uint32_t getPixelColour(size_t x, size_t y) const;
 	void clearPixels();
 	void savePPM(const std::string &filename) const;
+	void savePNG(const std::string &filename) const; // web-ready output
 };

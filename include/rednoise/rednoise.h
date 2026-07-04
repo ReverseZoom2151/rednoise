@@ -40,6 +40,10 @@ int rn_scene_triangle_count(const rn_scene *scene);
 int rn_render(const rn_scene *scene, rn_render_mode mode, int width, int height, float cam_z, int samples,
               unsigned char *rgba);
 
+/* Write an RGBA8 buffer (width*height*4 bytes, as filled by rn_render) to a PNG
+ * file. Returns 1 on success, 0 on failure. */
+int rn_save_png(const char *path, int width, int height, const unsigned char *rgba);
+
 /* Library version as a string, e.g. "0.1.0". */
 const char *rn_version(void);
 

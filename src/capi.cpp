@@ -11,6 +11,8 @@
 #include <new>
 #include <vector>
 
+#include "../third_party/stb/stb_image_write.h" // declarations; implementation in Canvas.cpp
+
 struct rn_scene {
 	std::vector<ModelTriangle> model;
 };
@@ -74,6 +76,12 @@ int rn_render(const rn_scene *scene, rn_render_mode mode, int width, int height,
 		rgba[i * 4 + 3] = static_cast<unsigned char>((p >> 24) & 0xFF);
 	}
 	return 1;
+}
+
+int rn_save_png(const char *path, int width, int height, const unsigned char *rgba) {
+	if (!path || !rgba || width <= 0 || height <= 0)
+		return 0;
+	return stbi_write_png(path, width, height, 4, rgba, width * 4) ? 1 : 0;
 }
 
 const char *rn_version(void) {
