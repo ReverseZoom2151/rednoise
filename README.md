@@ -22,6 +22,8 @@ Rendering modes:
 - Monte-Carlo path tracer: global illumination (colour bleeding), soft shadows,
   and anti-aliasing together.
 - Photon mapper: indirect light and caustics, with an optional final gather.
+- An OpenCL GPU path tracer that runs the same scene on the GPU in real time
+  (progressive accumulation; ~800 fps at 320x240 on an RTX A4000).
 
 Global illumination solvers:
 
@@ -48,7 +50,8 @@ Geometry and scenes:
 - OBJ/MTL loading with per-vertex normals; analytic spheres, planes, ellipsoids,
   cylinders and cones alongside triangles.
 - Object transforms, instancing, and distance-based level of detail.
-- A fractal-terrain (Perlin heightfield) generator.
+- A fractal-terrain (Perlin heightfield) generator and an animated
+  Gerstner-wave ocean surface.
 
 Camera and image:
 
@@ -61,9 +64,8 @@ Performance and output:
 - A BVH acceleration structure and OpenMP multithreading.
 - PPM/BMP screenshots and numbered PPM frame sequences for video.
 
-See [ROADMAP.md](ROADMAP.md) for the phased build history. The only unbuilt
-items are GPU/OpenCL offload, a real-time GPU path tracer, and an ocean-water
-simulation, all of which need hardware or scale this project does not target.
+See [ROADMAP.md](ROADMAP.md) for the phased build history. Every item on it,
+including the GPU path tracer and the ocean-water simulation, is built.
 
 ## Dependencies
 
@@ -119,6 +121,19 @@ ctest --test-dir build --output-on-failure          # unit tests
 ./build/render_headless assets/cornell-box.obj out 64 # + a 64-sample path-traced PPM
 ./build/gen_terrain assets/terrain.obj               # generate a fractal terrain mesh
 ./build/animate assets/cornell-box.obj frame 36      # orbiting camera -> frame-000.ppm ...
+./build/render_ocean ocean 24                        # 24 animated ocean frames
+```
+
+### GPU path tracer (OpenCL)
+
+Optional, needs an OpenCL SDK (e.g. the one bundled with the CUDA toolkit).
+Enable the target and run it from the repo root (the kernel `gpu/pathtracer.cl`
+loads at runtime):
+
+```sh
+cmake -B build -S . -DBUILD_GPU=ON
+cmake --build build
+./build/gpu_pathtracer assets/cornell-box.obj gpu.ppm 320 240 8 120
 ```
 
 ## Controls (interactive app)
@@ -146,7 +161,9 @@ redNoise/
 │   ├── Geometry / BVH / Scene    #   intersection, acceleration, analytic primitives
 │   ├── Light / Photon / Noise    #   lights, photon map, Perlin noise
 │   ├── Materials / ObjLoader / Transform  #   presets, OBJ/MTL loading, instancing, LOD
+│   ├── Ocean / Noise             #   Gerstner-wave ocean, Perlin noise
 │   └── Interpolation / Drawing   #   maths + line/triangle/texture drawing
+├── gpu/                    # OpenCL GPU path tracer: pathtracer.cl + host
 ├── framework/             # the "sdw" teaching framework (headers + sources together)
 │   ├── DrawingWindow.*     #   SDL3 window (the only SDL dependency)
 │   ├── Canvas.*            #   SDL-free pixel buffer + PPM save
