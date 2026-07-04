@@ -43,6 +43,10 @@ static Material materialFor(const std::string &name) {
 		return Material::Mirror;
 	if (name == "Glass")
 		return Material::Glass;
+	if (name == "Marble")
+		return Material::Procedural;
+	if (name == "Bumpy")
+		return Material::Bump;
 	return Material::Diffuse;
 }
 

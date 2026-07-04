@@ -41,6 +41,7 @@ set(ENGINE_SOURCES
         src/Geometry.cpp
         src/Drawing.cpp
         src/Renderer.cpp
+        src/Noise.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

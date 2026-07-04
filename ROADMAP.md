@@ -73,10 +73,10 @@ fully-shaded ray tracer and beyond.
 | [done] Glass refraction | Snell's-law transmitted ray with a recursion-depth cap. | ●●● | 20, RT |
 | [done] Fresnel blend | Mix reflection and refraction by view angle for realistic glass. | ●●● | 20 |
 | Raytraced texture sampling | Barycentric UV lookup at the hit point (extends our raster textures). | ●● | 20 |
-| Normal / bump mapping | Perturb normals from a texture for surface detail. | ●●● | 15 |
+| [done] Normal / bump mapping (procedural) | Perturb normals from a texture for surface detail. | ●●● | 15 |
 | Parallax mapping | Depth-parallax on textured surfaces. | ●●●● | 15 |
-| Environment map | Sky/background sampled by escaped rays. | ●●● | 15 |
-| Procedural textures (Perlin) | Noise-driven materials, e.g. wood grain, marble. | ●● | RT |
+| [done] Environment map | Sky/background sampled by escaped rays. | ●●● | 15 |
+| [done] Procedural textures (Perlin) | Noise-driven materials, e.g. wood grain, marble. | ●● | RT |
 
 ## Phase 6 - Shadows and lights
 

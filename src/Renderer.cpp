@@ -2,6 +2,7 @@
 
 #include "Drawing.h"
 #include "Geometry.h"
+#include "Noise.h"
 #include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
@@ -112,6 +113,30 @@ static glm::vec3 faceViewer(glm::vec3 normal, const glm::vec3 &rayDirection) {
 	return (glm::dot(normal, rayDirection) > 0.0f) ? -normal : normal;
 }
 
+// A simple procedural sky: rays that escape the scene sample this instead of black.
+static glm::vec3 environment(const glm::vec3 &direction) {
+	float t = 0.5f * (direction.y + 1.0f);
+	return glm::mix(glm::vec3(200.0f, 210.0f, 235.0f), glm::vec3(70.0f, 120.0f, 205.0f), t);
+}
+
+// Procedural wood grain from fBm-perturbed rings (Material::Procedural).
+static glm::vec3 proceduralColour(const glm::vec3 &p) {
+	glm::vec3 q = p * 3.0f;
+	float n = fractalNoise(q, 4);
+	float rings = 0.5f + 0.5f * std::sin((q.x + q.y) * 3.0f + n * 8.0f);
+	return glm::mix(glm::vec3(60.0f, 30.0f, 12.0f), glm::vec3(205.0f, 150.0f, 90.0f), rings);
+}
+
+// Perturb a normal by the gradient of a noise field (Material::Bump).
+static glm::vec3 bumpNormal(const glm::vec3 &normal, const glm::vec3 &p) {
+	glm::vec3 q = p * 6.0f;
+	float e = 0.15f;
+	glm::vec3 gradient(perlin(q.x + e, q.y, q.z) - perlin(q.x - e, q.y, q.z),
+	                   perlin(q.x, q.y + e, q.z) - perlin(q.x, q.y - e, q.z),
+	                   perlin(q.x, q.y, q.z + e) - perlin(q.x, q.y, q.z - e));
+	return glm::normalize(normal + 2.0f * gradient);
+}
+
 static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
                               const std::vector<ModelTriangle> &model, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -146,11 +171,16 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 		    (shading == ShadingModel::Phong)
 		        ? glm::normalize(w0 * tri.vertexNormals[0] + w1 * tri.vertexNormals[1] + w2 * tri.vertexNormals[2])
 		        : tri.normal;
-		shade = lightPoint(point, faceViewer(normal, rayDirection), viewDir, light, inShadow);
+		normal = faceViewer(normal, rayDirection);
+		if (tri.material == Material::Bump)
+			normal = bumpNormal(normal, point);
+		shade = lightPoint(point, normal, viewDir, light, inShadow);
 	}
 
-	const Colour &c = tri.colour;
-	return glm::vec3(c.red, c.green, c.blue) * shade.brightness + glm::vec3(255.0f) * shade.specular;
+	glm::vec3 base = (tri.material == Material::Procedural)
+	                     ? proceduralColour(point)
+	                     : glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue);
+	return base * shade.brightness + glm::vec3(255.0f) * shade.specular;
 }
 
 // Recursively trace a ray. Diffuse surfaces are shaded directly; mirrors reflect
@@ -159,7 +189,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
                           const glm::vec3 &light, ShadingModel shading, int depth) {
 	RayTriangleIntersection hit = getClosestIntersection(origin, direction, model);
 	if (!hit.hit)
-		return glm::vec3(0.0f); // background
+		return environment(direction); // sky
 	const ModelTriangle &tri = hit.intersectedTriangle;
 	glm::vec3 point = hit.intersectionPoint;
 
