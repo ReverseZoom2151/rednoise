@@ -128,6 +128,13 @@ if (BUILD_APP)
     target_include_directories(RedNoise PRIVATE framework src)
     target_link_libraries(RedNoise PRIVATE SDL3::SDL3 glm_headers)
     link_openmp(RedNoise)
+    # Put the SDL3 runtime library next to the exe so it runs out of the box.
+    # (A system package usually deploys it; a from-source fetch does not.)
+    if (WIN32)
+        add_custom_command(TARGET RedNoise POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL3::SDL3>" "$<TARGET_FILE_DIR:RedNoise>")
+    endif ()
     if (NOT MSVC)
         target_compile_options(RedNoise PRIVATE
                 "$<$<CONFIG:Release>:-O3;-march=native;-mtune=native>"
