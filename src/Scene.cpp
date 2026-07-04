@@ -33,6 +33,22 @@ static float planeT(const glm::vec3 &o, const glm::vec3 &d, const Plane &p) {
 	return (t > kEps) ? t : kInf;
 }
 
+static float diskT(const glm::vec3 &o, const glm::vec3 &d, const Disk &disk) {
+	// Intersect the disk's supporting plane, then keep the hit only if it lies
+	// within `radius` of the centre.
+	float denom = glm::dot(d, disk.normal);
+	if (std::abs(denom) < 1e-6f)
+		return kInf;
+	float t = glm::dot(disk.centre - o, disk.normal) / denom;
+	if (t <= kEps)
+		return kInf;
+	glm::vec3 hit = o + t * d;
+	glm::vec3 offset = hit - disk.centre;
+	if (glm::dot(offset, offset) > disk.radius * disk.radius)
+		return kInf;
+	return t;
+}
+
 static float ellipsoidT(const glm::vec3 &o, const glm::vec3 &d, const Ellipsoid &e) {
 	// Intersect the equivalent unit sphere in the ellipsoid's scaled space.
 	glm::vec3 oc = (o - e.center) / e.radii;
@@ -124,6 +140,11 @@ RayTriangleIntersection Scene::intersect(const glm::vec3 &origin, const glm::vec
 		if (t < closest.distanceFromCamera)
 			consider(t, glm::normalize(p.normal), p.colour, p.material, p.roughness);
 	}
+	for (const Disk &disk : prims_.disks) {
+		float t = diskT(origin, direction, disk);
+		if (t < closest.distanceFromCamera)
+			consider(t, glm::normalize(disk.normal), disk.colour, disk.material, disk.roughness);
+	}
 	for (const Ellipsoid &e : prims_.ellipsoids) {
 		float t = ellipsoidT(origin, direction, e);
 		if (t < closest.distanceFromCamera) {
@@ -158,6 +179,9 @@ bool Scene::occluded(const glm::vec3 &origin, const glm::vec3 &direction, float 
 			return true;
 	for (const Plane &p : prims_.planes)
 		if (planeT(origin, direction, p) < maxDistance)
+			return true;
+	for (const Disk &disk : prims_.disks)
+		if (diskT(origin, direction, disk) < maxDistance)
 			return true;
 	for (const Ellipsoid &e : prims_.ellipsoids)
 		if (ellipsoidT(origin, direction, e) < maxDistance)

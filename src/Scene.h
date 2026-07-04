@@ -33,6 +33,16 @@ struct Ellipsoid {
 	float roughness = 0.2f;
 };
 
+// Bounded circular plane: an infinite plane clipped to `radius` about `centre`.
+struct Disk {
+	glm::vec3 centre{};
+	glm::vec3 normal{0.0f, 1.0f, 0.0f};
+	float radius = 1.0f;
+	Colour colour{};
+	Material material = Material::Diffuse;
+	float roughness = 0.2f;
+};
+
 // Finite cylinder about the y-axis (no end caps), spanning center.y +/- halfHeight.
 struct Cylinder {
 	glm::vec3 center{};
@@ -58,6 +68,7 @@ struct Cone {
 struct Primitives {
 	std::vector<Sphere> spheres;
 	std::vector<Plane> planes;
+	std::vector<Disk> disks;
 	std::vector<Ellipsoid> ellipsoids;
 	std::vector<Cylinder> cylinders;
 	std::vector<Cone> cones;

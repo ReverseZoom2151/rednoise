@@ -21,6 +21,7 @@
 #include "ObjLoader.h"
 #include "Octree.h"
 #include "OceanFFT.h"
+#include "Scene.h"
 #include "SceneGraph.h"
 #include "Sky.h"
 #include "Transform.h"
@@ -358,6 +359,17 @@ static void testDeepScanModules() {
 	glm::vec3 skyUp = skyColour(glm::vec3(0, 1, 0), sun), atSun = skyColour(sun, sun);
 	CHECK(skyUp.b > skyUp.r);                     // blue sky overhead
 	CHECK(atSun.r + atSun.g > skyUp.r + skyUp.g); // the sun region is much brighter/warmer
+
+	// Disk primitive: a ray through the centre hits; one outside the radius misses.
+	std::vector<ModelTriangle> noTris;
+	Primitives diskPrims;
+	diskPrims.disks.push_back(
+	    {glm::vec3(0, 0, -2), glm::vec3(0, 0, 1), 0.5f, Colour(200, 0, 0), Material::Diffuse, 0.2f});
+	Scene diskScene(noTris, diskPrims);
+	RayTriangleIntersection dh = diskScene.intersect(glm::vec3(0, 0, 0), glm::vec3(0, 0, -1));
+	CHECK(dh.hit && nearly(dh.distanceFromCamera, 2.0f));
+	RayTriangleIntersection dm = diskScene.intersect(glm::vec3(1.0f, 0, 0), glm::vec3(0, 0, -1)); // 1 unit off, r=0.5
+	CHECK(!dm.hit);
 }
 
 int main() {
