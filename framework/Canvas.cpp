@@ -5,7 +5,14 @@
 #include <fstream>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
 #include "../third_party/stb/stb_image_write.h"
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 Canvas::Canvas(size_t w, size_t h) : width(w), height(h), pixels(w * h, 0) {}
 
