@@ -155,6 +155,44 @@ that were not in the original plan.
 
 ---
 
+## Phase 12 - Deep-scan gaps
+
+Found by reading every PDF, lecture, worksheet, report and gallery entry across
+all four `extras/` repositories (not just the source). Independent modules were
+built by a fan-out of parallel agents; tracer-coupled features serially.
+
+| Feature | Source | Status |
+| --- | --- | --- |
+| Spectral dispersion (per-wavelength IOR) | lecture 04 | [done] |
+| Sub-surface scattering (BSSRDF approx) | lecture 05 | [done] |
+| Depth fog + 3-term light attenuation | lecture 04/10 | [done] |
+| Tangent-space normal mapping | lecture 11 / gallery | [done] |
+| Mipmapping + trilinear filtering | lecture 11 | [done] |
+| True displacement mapping | lecture 05/11 | [done] |
+| Participating media (light shafts) | lecture 16 | [done] |
+| Volume-aware irradiance cache (Ward) | lecture 16 | [done] |
+| Progressive (shooting) radiosity | lecture 14 | [done] |
+| Accumulation buffer | lecture 11 | [done] |
+| Stencil shadow volumes (z-fail) | lecture 11 | [done] |
+| Delaunay + mesh decimation (meshing toolkit) | lecture 17 | [done] |
+| Octree + KD-tree acceleration | lecture 06 / gallery | [done] |
+| Hierarchical scene graph | rasteriser brief | [done] |
+| Fractal volumetric clouds | raytracer brief | [done] |
+| Voxelisation + surface meshing | lecture 03 | [done] |
+| NURBS / B-spline surfaces | lecture 03 | [done] |
+| Spectral (Tessendorf) FFT ocean | gallery | [done] |
+| HSV colour space + median-cut palette | lecture 03 | [done] |
+| Bresenham / Wu-AA lines + Cohen-Sutherland clip | lecture 08/09/12 | [done] |
+| Emissive geometry as an area light | ideas.txt | [done] |
+| Disco ball (faceted mirror) | ideas.txt | [done] |
+| Cramer's-rule intersection | lecture 03/06 | [done] |
+
+Intentionally skipped (output-identical micro-optimisations that would only add
+dead alternate code paths): a refraction lookup table (glm::refract already
+covers it) and a sqrt-free cube-map lookup.
+
+---
+
 ## Suggested near-term path
 
 1. Perspective projection + wireframe (Phase 1) - the box finally appears.
