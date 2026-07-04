@@ -14,8 +14,9 @@ artifacts.
 
 ## Gallery
 
-All images below are output from this renderer (reproduce them with the showcase
-scenes in `tools/`).
+All images below are output from this renderer. The last row renders the
+reference course scene assets (the Stanford bunny, the Bristol logo, and the rich
+Cornell scene) from the COMS30020 coursework with our engine.
 
 <table>
 <tr>
@@ -37,6 +38,11 @@ scenes in `tools/`).
 <td align="center"><img src="gallery/10_ocean.png" width="260"><br><sub><b>Gerstner ocean</b>: glass water with Fresnel reflection</sub></td>
 <td align="center"><img src="gallery/11_disco_ball.png" width="260"><br><sub><b>Disco ball</b>: a faceted mirror sphere</sub></td>
 <td align="center"><img src="gallery/12_clouds.png" width="260"><br><sub><b>Volumetric clouds</b>: fractal density raymarch</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="gallery/13_bunny.png" width="260"><br><sub><b>Stanford bunny</b>: a classic mesh in the Cornell box</sub></td>
+<td align="center"><img src="gallery/14_logo.png" width="260"><br><sub><b>Bristol logo</b>: the course logo asset as polished gold metal</sub></td>
+<td align="center"><img src="gallery/15_cornell_shapes.png" width="260"><br><sub><b>Rich Cornell scene</b>: bunny, spheres and logo (704 triangles)</sub></td>
 </tr>
 </table>
 
