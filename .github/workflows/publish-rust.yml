@@ -1,0 +1,46 @@
+name: publish-rust
+
+# Publish the `rednoise` crate to crates.io. The crate builds the C++ engine
+# from source out of its vendored sources, so publishing just needs to populate
+# vendor/ (git-ignored) before packaging.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install a C++23 compiler (gcc-13)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13 g++-13
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 130 \
+            --slave /usr/bin/g++ g++ /usr/bin/g++-13
+          gcc --version
+          g++ --version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Populate vendor/ with the C++ engine sources
+        run: bash bindings/rust/vendor.sh
+
+      # Verify the package builds and is well-formed before publishing.
+      # --allow-dirty because vendor/ is untracked (git-ignored on purpose).
+      - name: Verify (cargo publish --dry-run)
+        env:
+          CC: gcc-13
+          CXX: g++-13
+        run: cargo publish --manifest-path bindings/rust/Cargo.toml --dry-run --allow-dirty
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CC: gcc-13
+          CXX: g++-13
+        run: cargo publish --manifest-path bindings/rust/Cargo.toml --allow-dirty

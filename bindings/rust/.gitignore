@@ -1,2 +1,10 @@
+# Vendored C++ engine sources. These are copied in from the repo root by
+# vendor.sh and are NOT committed (to avoid duplicating the engine in the main
+# repo). The publish workflow runs vendor.sh to populate this directory before
+# `cargo publish`, and Cargo.toml's `include` list packages it, so the published
+# crate is fully self-contained.
+/vendor/
+
+# Rust build artifacts.
 /target
 Cargo.lock

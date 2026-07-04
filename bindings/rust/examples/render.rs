@@ -1,10 +1,11 @@
 //! Render the Cornell box with the path tracer and save it to a PNG.
 //!
-//! Build the native C++ library first, then run this example from the crate
-//! directory (`bindings/rust`), pointing the linker at the build output:
+//! The crate compiles the C++ engine from source, so no prebuilt library is
+//! needed. Run this example from the repository root so the asset path
+//! resolves:
 //!
 //! ```sh
-//! REDNOISE_LIB_DIR=<repo>/build cargo run --example render
+//! cargo run --manifest-path bindings/rust/Cargo.toml --example render
 //! ```
 //!
 //! The OBJ path below is relative to the current working directory, so run it

@@ -3,16 +3,34 @@ name = "rednoise"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Safe Rust bindings for the RedNoise CPU software renderer (wireframe, rasteriser, ray tracer, path tracer)."
+description = "Safe Rust bindings for the RedNoise CPU software renderer (wireframe, rasteriser, ray tracer, path tracer). Builds the C++ engine from source."
 repository = "https://github.com/ReverseZoom2151/rednoise"
 readme = "README.md"
 keywords = ["graphics", "rendering", "ray-tracing", "raytracing", "renderer"]
 categories = ["graphics", "rendering", "external-ffi-bindings"]
-# Declares that this crate links the native `rednoise` library. Cargo enforces
-# that at most one crate in the graph claims this name, and lets build.rs
-# metadata flow to dependents.
+# Declares that this crate provides the native `rednoise` library. Cargo
+# enforces that at most one crate in the graph claims this name.
 links = "rednoise"
 build = "build.rs"
+
+# The C++ engine is compiled from source at build time (see build.rs), so the
+# vendored sources under `vendor/` must be packaged. `vendor/` is git-ignored to
+# keep the main repo lean, and gitignored files are normally dropped from the
+# package - specifying `include` overrides that and packages exactly this list,
+# gitignore notwithstanding. The publish workflow runs `vendor.sh` to populate
+# `vendor/` before `cargo publish`, so these files exist at publish time.
+include = [
+    "src/**/*.rs",
+    "examples/**/*.rs",
+    "vendor/**/*",
+    "build.rs",
+    "vendor.sh",
+    "Cargo.toml",
+    "README.md",
+]
+
+[build-dependencies]
+cc = "1"
 
 [[example]]
 name = "render"

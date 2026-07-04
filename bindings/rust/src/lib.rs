@@ -23,9 +23,9 @@
 //! # }
 //! ```
 //!
-//! Building requires the native `rednoise` library. See the crate README for
-//! how to build the C++ library and point the linker at it via the
-//! `REDNOISE_LIB_DIR` environment variable.
+//! The crate builds the C++ engine from source at build time (via the `cc`
+//! crate), so it needs only a C++23 compiler - no prebuilt library and no
+//! network access. See the crate README for details.
 
 use std::ffi::{CStr, CString};
 use std::fmt;
