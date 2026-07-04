@@ -17,3 +17,8 @@ void appendInstance(std::vector<ModelTriangle> &scene, const std::vector<ModelTr
 const std::vector<ModelTriangle> &selectLOD(float distance, float switchDistance,
                                             const std::vector<ModelTriangle> &highMesh,
                                             const std::vector<ModelTriangle> &lowMesh);
+
+// True displacement mapping: subdivide each triangle `levels` times, then push
+// every vertex along its interpolated normal by fractal-noise height * amplitude
+// and recompute normals. Unlike bump/parallax this changes the silhouette.
+std::vector<ModelTriangle> displaceMesh(const std::vector<ModelTriangle> &mesh, int levels, float amplitude);
