@@ -27,7 +27,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 1 - Core rasteriser (the Cornell box appears)
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | [next] Perspective projection | Project `ModelTriangle` vertices through a pinhole camera to canvas points (`u = -f*x/z + W/2`). First 3D image. | ● | 20, 15, CG |
 | [next] Wireframe render mode | Draw projected triangle edges. Immediate visual payoff, minimal maths. | ● | 20, 15 |
 | Filled + depth (z-)buffer | Rasterise filled triangles with a per-pixel `1/z` buffer for correct occlusion. | ●● | 20, 15, CG |
@@ -36,7 +36,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 2 - Camera
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Translate + rotate | WASD/arrows move; X/Y/Z rotation matrices on position + orientation. | ● | 20, 15 |
 | lookAt | Build an orthonormal basis aimed at a target point. | ● | 20, 15, RT, CG |
 | Orbit | Rotate the camera around the scene each frame, re-aiming via lookAt. | ● | 20 |
@@ -45,7 +45,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 3 - Core raytracer
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Ray-triangle intersection | Moller-Trumbore / matrix-inverse barycentric solve; closest-hit search. | ●● | 20, 15, CG, RT |
 | Hard shadows | Shadow ray to the light; occlusion darkens the pixel. | ●● | 20, 15, CG, RT |
 | Diffuse + ambient | Inverse-square proximity, angle-of-incidence Lambert, ambient floor. | ●● | 20, 15, CG, RT |
@@ -54,7 +54,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 4 - Shading models
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Specular highlights | Phong or Blinn-Phong `pow(R·V, n)` term. | ●● | 20, RT |
 | Per-vertex normals | Read `vn` from OBJ, else average adjacent face normals; enables smooth shading. | ●● | 20 |
 | Gouraud shading | Light per vertex, interpolate brightness across the triangle. | ●● | 20, 15 |
@@ -63,7 +63,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 5 - Materials and optics
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Mirror reflection | Recursive reflected ray for `Mirror` materials (our MTL already names them). | ●●● | 20, CG, RT |
 | Glass refraction | Snell's-law transmitted ray with a recursion-depth cap. | ●●● | 20, RT |
 | Fresnel blend | Mix reflection and refraction by view angle for realistic glass. | ●●● | 20 |
@@ -76,7 +76,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 6 - Shadows and lights
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Soft shadows / area lights | Jitter many samples over a light's area, average occlusion. | ●●● | 20, CG, 15 |
 | Shadow-buffer (rasteriser) | Render depth from the light, reproject to shade (shadow mapping). | ●●● | CG |
 | Multiple + typed lights | Point (attenuation), directional, spotlight cone. | ●● | RT, 15 |
@@ -85,7 +85,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 7 - Performance
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Backface culling | Skip triangles facing away from the camera. | ● | CG, 15 |
 | View-frustum / near-plane clipping | Clip geometry crossing the camera plane (fixes projection blowups). | ●●● | 15, CG |
 | BVH / kd-tree / octree | Spatial acceleration so raytracing scales past brute force O(n). | ●●●● | 15 |
@@ -95,7 +95,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 8 - Image quality
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Supersampling AA | N sub-samples per pixel, averaged. | ●● | CG, RT, 15 |
 | FXAA (post-process) | Cheap luma-edge anti-aliasing on the final image. | ●●● | CG |
 | Depth of field | Sample a lens aperture for focus blur. | ●●● | 15 |
@@ -105,7 +105,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 9 - Global illumination (the deep end)
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Multi-bounce indirect / colour bleeding | Secondary diffuse bounces for the classic Cornell glow. | ●●●● | 15, CG |
 | Photon mapping + final gather | Emit photons, gather radiance; caustics and GI. | ●●●●● | CG, 15 |
 | Caustics | Focused light through glass/water onto surfaces. | ●●●●● | 15 |
@@ -114,7 +114,7 @@ The geometry is parsed but not yet drawn in 3D. Everything below is the path fro
 ## Phase 10 - Content, output and polish
 
 | Build | What it adds | Diff | Seen in |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | More primitives | Spheres, planes, quadrics (ellipsoid/cone/cylinder) alongside triangles. | ●● | RT |
 | Extra meshes | Load spheres, bunny, logo, higher-poly Cornell scenes. | ● | 20 |
 | Object transforms / instancing | Translate/scale/rotate matrices per object. | ●● | RT |
