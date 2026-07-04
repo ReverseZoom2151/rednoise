@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <glm/glm.hpp>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -241,6 +242,27 @@ static glm::vec2 parallaxUV(const ModelTriangle &tri, glm::vec2 uv, const glm::v
 	return uv - offset;
 }
 
+// The surface's own colour (0..255) at a hit: sampled texture, procedural, or flat.
+static glm::vec3 surfaceBaseColour(const RayTriangleIntersection &hit, const glm::vec3 &viewDir) {
+	const ModelTriangle &tri = hit.intersectedTriangle;
+	float w0 = 1.0f - hit.u - hit.v;
+	float w1 = hit.u;
+	float w2 = hit.v;
+	if (tri.texture) {
+		float tu = w0 * tri.texturePoints[0].x + w1 * tri.texturePoints[1].x + w2 * tri.texturePoints[2].x;
+		float tv = w0 * tri.texturePoints[0].y + w1 * tri.texturePoints[1].y + w2 * tri.texturePoints[2].y;
+		if (tri.material == Material::Parallax) {
+			glm::vec2 uv = parallaxUV(tri, glm::vec2(tu, tv), viewDir);
+			tu = uv.x;
+			tv = uv.y;
+		}
+		return sampleTexture(*tri.texture, tu, tv);
+	}
+	if (tri.material == Material::Procedural)
+		return proceduralColour(hit.intersectionPoint);
+	return glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue);
+}
+
 static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection,
                               const std::vector<Light> &lights, const BVH &bvh, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -253,22 +275,7 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 	float w1 = hit.u;
 	float w2 = hit.v;
 
-	// Base surface colour: texture, procedural, or flat.
-	glm::vec3 base;
-	if (tri.texture) {
-		float tu = w0 * tri.texturePoints[0].x + w1 * tri.texturePoints[1].x + w2 * tri.texturePoints[2].x;
-		float tv = w0 * tri.texturePoints[0].y + w1 * tri.texturePoints[1].y + w2 * tri.texturePoints[2].y;
-		if (tri.material == Material::Parallax) {
-			glm::vec2 uv = parallaxUV(tri, glm::vec2(tu, tv), viewDir);
-			tu = uv.x;
-			tv = uv.y;
-		}
-		base = sampleTexture(*tri.texture, tu, tv);
-	} else if (tri.material == Material::Procedural) {
-		base = proceduralColour(point);
-	} else {
-		base = glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue);
-	}
+	glm::vec3 base = surfaceBaseColour(hit, viewDir);
 
 	if (shading == ShadingModel::Gouraud) {
 		// Shade each vertex, then interpolate the resulting colour.
@@ -335,6 +342,95 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 	return shadeDiffuse(hit, direction, lights, bvh, shading);
 }
 
+// --- Monte-Carlo path tracer ------------------------------------------------
+
+// Cosine-weighted hemisphere direction around a normal.
+static glm::vec3 cosineHemisphere(const glm::vec3 &n, std::mt19937 &rng) {
+	std::uniform_real_distribution<float> U(0.0f, 1.0f);
+	float u1 = U(rng), u2 = U(rng);
+	float r = std::sqrt(u1);
+	float theta = 2.0f * 3.14159265f * u2;
+	float x = r * std::cos(theta), y = r * std::sin(theta), z = std::sqrt(std::max(0.0f, 1.0f - u1));
+	glm::vec3 up = std::abs(n.z) < 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(1, 0, 0);
+	glm::vec3 t = glm::normalize(glm::cross(up, n));
+	glm::vec3 b = glm::cross(n, t);
+	return glm::normalize(t * x + b * y + n * z);
+}
+
+// Direct lighting (0..1) at a diffuse point, summed over the lights.
+static glm::vec3 directLight(const glm::vec3 &point, const glm::vec3 &normal, const glm::vec3 &albedo,
+                             const std::vector<Light> &lights, const BVH &bvh, int ignore) {
+	glm::vec3 sum(0.0f);
+	for (const Light &L : lights) {
+		glm::vec3 lightDir;
+		float attenuation;
+		if (L.type == LightType::Directional) {
+			lightDir = -glm::normalize(L.direction);
+			attenuation = L.intensity / 40.0f;
+		} else {
+			glm::vec3 to = L.position - point;
+			float dist = glm::length(to);
+			lightDir = to / dist;
+			attenuation = L.intensity / (4.0f * 3.14159265f * dist * dist);
+		}
+		float cone = 1.0f;
+		if (L.type == LightType::Spot)
+			cone = (glm::dot(-lightDir, glm::normalize(L.direction)) > L.coneCos) ? 1.0f : 0.0f;
+		float vis = visibility(L, point, bvh, ignore);
+		float incidence = std::max(0.0f, glm::dot(normal, lightDir));
+		sum += L.colour * (vis * cone * attenuation * incidence);
+	}
+	return albedo * glm::min(sum, glm::vec3(1.0f));
+}
+
+// Trace one path: direct light at each diffuse bounce plus a recursive
+// cosine-weighted indirect bounce (this is what produces colour bleeding /
+// global illumination). Mirror reflects; glass reflects or refracts
+// stochastically by Fresnel.
+static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, const BVH &bvh,
+                           const std::vector<Light> &lights, int depth, std::mt19937 &rng) {
+	RayTriangleIntersection hit = bvh.intersect(origin, direction);
+	if (!hit.hit)
+		return environment(direction) / 255.0f;
+	const ModelTriangle &tri = hit.intersectedTriangle;
+	glm::vec3 point = hit.intersectionPoint;
+	int ignore = static_cast<int>(hit.triangleIndex);
+
+	if (tri.material == Material::Mirror && depth > 0) {
+		glm::vec3 n = faceViewer(tri.normal, direction);
+		glm::vec3 reflected = glm::reflect(direction, n);
+		return pathTrace(point + 1e-4f * reflected, reflected, bvh, lights, depth - 1, rng);
+	}
+	if (tri.material == Material::Glass && depth > 0) {
+		const float ior = 1.5f;
+		glm::vec3 n = tri.normal;
+		float cosi = glm::dot(direction, n);
+		float etai = 1.0f, etat = ior;
+		if (cosi < 0.0f) {
+			cosi = -cosi;
+		} else {
+			std::swap(etai, etat);
+			n = -n;
+		}
+		float r0 = (etai - etat) / (etai + etat);
+		r0 *= r0;
+		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
+		glm::vec3 refracted = glm::refract(direction, n, etai / etat);
+		std::uniform_real_distribution<float> U(0.0f, 1.0f);
+		glm::vec3 dir = (glm::length(refracted) < 1e-6f || U(rng) < fresnel) ? glm::reflect(direction, n) : refracted;
+		return pathTrace(point + 1e-4f * dir, dir, bvh, lights, depth - 1, rng);
+	}
+
+	glm::vec3 n = faceViewer(triangleNormal(tri), direction);
+	glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+	glm::vec3 direct = directLight(point, n, albedo, lights, bvh, ignore);
+	if (depth <= 0)
+		return direct;
+	glm::vec3 bounce = cosineHemisphere(n, rng);
+	glm::vec3 indirect = albedo * pathTrace(point + 1e-4f * bounce, bounce, bvh, lights, depth - 1, rng);
+	return direct + indirect;
+}
+
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
                      ShadingModel shading, const std::vector<Light> &lights) {
 	canvas.clearPixels();
@@ -361,6 +457,44 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
 			glm::vec3 colour = traceRay(camera.position, direction, bvh, used, shading, maxDepth);
+			int r = std::min(255, static_cast<int>(colour.r));
+			int g = std::min(255, static_cast<int>(colour.g));
+			int b = std::min(255, static_cast<int>(colour.b));
+			canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
+		}
+	}
+}
+
+void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
+                      const std::vector<Light> &lights) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	float f = camera.focalLength * camera.scale;
+	const int maxDepth = 4;
+	BVH bvh(model);
+
+	std::vector<Light> used = lights;
+	if (used.empty()) {
+		Light d;
+		d.radius = 0.15f;
+		used.push_back(d);
+	}
+
+#pragma omp parallel for schedule(dynamic, 4)
+	for (int y = 0; y < H; y++) {
+		for (int x = 0; x < W; x++) {
+			std::mt19937 rng(static_cast<unsigned>((y * W + x) * 9781 + 1)); // per-pixel seed = reproducible
+			std::uniform_real_distribution<float> jitter(-0.5f, 0.5f);
+			glm::vec3 sum(0.0f);
+			for (int s = 0; s < samples; s++) {
+				// Jitter within the pixel: supersampling anti-aliasing for free.
+				float jx = jitter(rng), jy = jitter(rng);
+				glm::vec3 dirCamera((x + 0.5f + jx - W / 2.0f) / f, -(y + 0.5f + jy - H / 2.0f) / f, -1.0f);
+				glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
+				sum += pathTrace(camera.position, direction, bvh, used, maxDepth, rng);
+			}
+			glm::vec3 colour = sum / static_cast<float>(samples) * 255.0f;
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));

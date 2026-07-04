@@ -101,7 +101,7 @@ fully-shaded ray tracer and beyond.
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| Supersampling AA | N sub-samples per pixel, averaged. | ●● | CG, RT, 15 |
+| [done] Supersampling AA (path tracer) | N sub-samples per pixel, averaged. | ●● | CG, RT, 15 |
 | FXAA (post-process) | Cheap luma-edge anti-aliasing on the final image. | ●●● | CG |
 | Depth of field | Sample a lens aperture for focus blur. | ●●● | 15 |
 | Motion blur | Integrate over shutter time for moving geometry. | ●●● | 15 |
@@ -111,10 +111,10 @@ fully-shaded ray tracer and beyond.
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| Multi-bounce indirect / colour bleeding | Secondary diffuse bounces for the classic Cornell glow. | ●●●● | 15, CG |
+| [done] Multi-bounce indirect / colour bleeding | Secondary diffuse bounces for the classic Cornell glow. | ●●●● | 15, CG |
 | Photon mapping + final gather | Emit photons, gather radiance; caustics and GI. | ●●●●● | CG, 15 |
 | Caustics | Focused light through glass/water onto surfaces. | ●●●●● | 15 |
-| Path tracing | Monte-Carlo GI; the reference standard for realism. | ●●●●● | 15 |
+| [done] Path tracing | Monte-Carlo GI; the reference standard for realism. | ●●●●● | 15 |
 
 ## Phase 10 - Content, output and polish
 

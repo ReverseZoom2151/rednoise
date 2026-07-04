@@ -10,6 +10,7 @@
 #include "Renderer.h"
 #include <Canvas.h>
 #include <ModelTriangle.h>
+#include <cstdlib>
 #include <glm/glm.hpp>
 #include <iostream>
 #include <string>
@@ -37,6 +38,13 @@ int main(int argc, char **argv) {
 	canvas.savePPM(outPrefix + "-rasterised.ppm");
 	renderRaytraced(model, camera, canvas);
 	canvas.savePPM(outPrefix + "-raytraced.ppm");
+
+	// Optional third argument = path-tracer samples per pixel (slower).
+	if (argc > 3) {
+		int samples = std::atoi(argv[3]);
+		renderPathTraced(model, camera, canvas, samples);
+		canvas.savePPM(outPrefix + "-pathtraced.ppm");
+	}
 
 	std::cout << "Rendered " << model.size() << " triangles to " << outPrefix << "-{wireframe,rasterised,raytraced}.ppm"
 	          << std::endl;

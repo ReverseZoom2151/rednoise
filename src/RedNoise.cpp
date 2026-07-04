@@ -11,7 +11,7 @@
 #define WIDTH 320
 #define HEIGHT 240
 
-enum class RenderMode { Wireframe, Rasterised, Raytraced };
+enum class RenderMode { Wireframe, Rasterised, Raytraced, PathTraced };
 
 static RenderMode renderMode = RenderMode::Rasterised;
 static ShadingModel shadingModel = ShadingModel::Phong;
@@ -43,6 +43,9 @@ void draw() {
 		break;
 	case RenderMode::Raytraced:
 		renderRaytraced(model, camera, canvas, shadingModel);
+		break;
+	case RenderMode::PathTraced:
+		renderPathTraced(model, camera, canvas, 8); // few samples for interactivity
 		break;
 	}
 }
@@ -110,6 +113,10 @@ void handleEvent(SDL_Event event) {
 		case SDLK_3:
 			renderMode = RenderMode::Raytraced;
 			std::cout << "raytraced" << std::endl;
+			break;
+		case SDLK_G:
+			renderMode = RenderMode::PathTraced;
+			std::cout << "path traced" << std::endl;
 			break;
 		// Shading model (ray tracer).
 		case SDLK_4:

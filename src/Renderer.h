@@ -24,3 +24,8 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 // single default soft area light.
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
                      ShadingModel shading = ShadingModel::Phong, const std::vector<Light> &lights = {});
+
+// Monte-Carlo path tracer: `samples` jittered paths per pixel give global
+// illumination (colour bleeding), soft shadows, and anti-aliasing together.
+void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples = 32,
+                      const std::vector<Light> &lights = {});
