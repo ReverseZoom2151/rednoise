@@ -46,6 +46,6 @@ jobs:
         run: |
           for f in src/*.cpp framework/*.cpp; do
             echo "checking $f"
-            clang++ -std=c++17 -fsyntax-only -Wall -Wextra -Wno-unused-parameter \
+            clang++ -std=c++23 -fsyntax-only -Wall -Wextra -Wno-unused-parameter \
               -Iframework -Ithird_party -Isrc -I/tmp/SDL/include "$f"
           done

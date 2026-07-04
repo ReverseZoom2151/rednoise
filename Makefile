@@ -7,7 +7,7 @@ SOURCE_FILES := $(wildcard src/*.cpp) $(wildcard framework/*.cpp)
 
 # Build settings
 COMPILER         := clang++
-COMPILER_OPTIONS := -pipe -std=c++17
+COMPILER_OPTIONS := -pipe -std=c++23
 INCLUDES         := -Iframework -Ithird_party
 WARNINGS         := -Wall
 DEBUG_OPTIONS    := -ggdb -g3

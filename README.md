@@ -43,7 +43,7 @@ redNoise/
 | [SDL3](https://www.libsdl.org) | 3.x | System library (vcpkg / package manager) |
 | [glm](https://github.com/g-truc/glm) | 1.0.1 | Vendored in `third_party/glm` (nothing to install) |
 
-A C++17 compiler is required.
+A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+).
 
 ## Building
 
