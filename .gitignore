@@ -20,3 +20,5 @@ CMakePresets.json.user
 .DS_Store
 Thumbs.db
 *.swp
+.vscode/
+.idea/
