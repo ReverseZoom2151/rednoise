@@ -346,7 +346,7 @@ static glm::vec3 shadeSurface(const glm::vec3 &point, const glm::vec3 &normal, c
 			glm::vec3 to = L.position - point;
 			float dist = glm::length(to);
 			lightDir = to / dist;
-			attenuation = L.intensity / (4.0f * 3.14159265f * dist * dist);
+			attenuation = L.intensity / (L.attenConstant + L.attenLinear * dist + L.attenQuadratic * dist * dist);
 		}
 		float cone = 1.0f;
 		if (L.type == LightType::Spot)
@@ -483,6 +483,36 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 // Recursively trace a ray. Diffuse surfaces are shaded directly; mirrors reflect
 // and glass reflects + refracts (Fresnel-weighted), bounded by `depth`.
 static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const Scene &scene,
+                          const std::vector<Light> &lights, ShadingModel shading, int depth);
+
+// Reflect + refract a glass surface for a single index of refraction, blended by
+// Fresnel. Tracing this per-wavelength (with slightly different `ior`) gives
+// chromatic dispersion (prisms, rainbow fringing).
+static glm::vec3 glassTrace(const glm::vec3 &point, const glm::vec3 &direction, const glm::vec3 &triNormal,
+                            const Scene &scene, const std::vector<Light> &lights, ShadingModel shading, int depth,
+                            float ior) {
+	glm::vec3 n = triNormal;
+	float cosi = glm::dot(direction, n);
+	float etai = 1.0f, etat = ior;
+	if (cosi < 0.0f) {
+		cosi = -cosi;
+	} else {
+		std::swap(etai, etat);
+		n = -n;
+	}
+	glm::vec3 reflected = glm::reflect(direction, n);
+	glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, scene, lights, shading, depth - 1);
+	glm::vec3 refracted = glm::refract(direction, n, etai / etat);
+	if (glm::length(refracted) < 1e-6f)
+		return reflectionColour; // total internal reflection
+	float r0 = (etai - etat) / (etai + etat);
+	r0 *= r0;
+	float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
+	glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, scene, lights, shading, depth - 1);
+	return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
+}
+
+static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const Scene &scene,
                           const std::vector<Light> &lights, ShadingModel shading, int depth) {
 	RayTriangleIntersection hit = scene.intersect(origin, direction);
 	if (!hit.hit)
@@ -497,28 +527,15 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 	}
 
 	if (depth > 0 && tri.material == Material::Glass) {
-		const float ior = 1.5f;
-		glm::vec3 n = tri.normal;
-		float cosi = glm::dot(direction, n);
-		float etai = 1.0f, etat = ior;
-		if (cosi < 0.0f) {
-			cosi = -cosi; // ray entering the surface
-		} else {
-			std::swap(etai, etat); // ray exiting: flip the normal to oppose it
-			n = -n;
-		}
-		float eta = etai / etat;
-		glm::vec3 reflected = glm::reflect(direction, n);
-		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, scene, lights, shading, depth - 1);
-		glm::vec3 refracted = glm::refract(direction, n, eta);
-		if (glm::length(refracted) < 1e-6f)
-			return reflectionColour; // total internal reflection
-		// Schlick's Fresnel approximation.
-		float r0 = (etai - etat) / (etai + etat);
-		r0 *= r0;
-		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
-		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, scene, lights, shading, depth - 1);
-		return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
+		return glassTrace(point, direction, tri.normal, scene, lights, shading, depth, 1.5f);
+	}
+	if (depth > 0 && tri.material == Material::Dispersive) {
+		// Trace each colour channel with a slightly different index of refraction
+		// (red bends least, blue most), so white light fans into a spectrum.
+		glm::vec3 r = glassTrace(point, direction, tri.normal, scene, lights, shading, depth, 1.50f);
+		glm::vec3 g = glassTrace(point, direction, tri.normal, scene, lights, shading, depth, 1.53f);
+		glm::vec3 b = glassTrace(point, direction, tri.normal, scene, lights, shading, depth, 1.56f);
+		return glm::vec3(r.r, g.g, b.b);
 	}
 
 	if (depth > 0 && tri.material == Material::Metal) {
@@ -562,7 +579,7 @@ static glm::vec3 directLight(const glm::vec3 &point, const glm::vec3 &normal, co
 			glm::vec3 to = L.position - point;
 			float dist = glm::length(to);
 			lightDir = to / dist;
-			attenuation = L.intensity / (4.0f * 3.14159265f * dist * dist);
+			attenuation = L.intensity / (L.attenConstant + L.attenLinear * dist + L.attenQuadratic * dist * dist);
 		}
 		float cone = 1.0f;
 		if (L.type == LightType::Spot)
@@ -592,7 +609,7 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 		glm::vec3 reflected = glm::reflect(direction, n);
 		return pathTrace(point + 1e-4f * reflected, reflected, scene, lights, depth - 1, rng);
 	}
-	if (tri.material == Material::Glass && depth > 0) {
+	if ((tri.material == Material::Glass || tri.material == Material::Dispersive) && depth > 0) {
 		const float ior = 1.5f;
 		glm::vec3 n = tri.normal;
 		float cosi = glm::dot(direction, n);

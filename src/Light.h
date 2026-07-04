@@ -15,4 +15,9 @@ struct Light {
 	float intensity = 40.0f;
 	float radius = 0.0f;  // area/volume-light size; 0 = a hard point light
 	float coneCos = 0.9f; // Spot cone, cosine of the half-angle
+	// Distance attenuation 1 / (kc + kl*d + kq*d^2). The defaults reproduce the
+	// physical inverse-square falloff; set kc/kl for the classic OpenGL model.
+	float attenConstant = 0.0f;
+	float attenLinear = 0.0f;
+	float attenQuadratic = 12.566370f; // 4*pi
 };

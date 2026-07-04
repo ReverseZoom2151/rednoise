@@ -61,6 +61,8 @@ static Material materialFor(const std::string &name) {
 		return Material::Parallax;
 	if (name == "Metal")
 		return Material::Metal;
+	if (name == "Dispersive" || name == "Prism")
+		return Material::Dispersive;
 	return Material::Diffuse;
 }
 

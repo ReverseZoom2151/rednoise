@@ -9,7 +9,7 @@
 #include "TexturePoint.h"
 
 // Surface response used by the ray tracer.
-enum class Material { Diffuse, Mirror, Glass, Procedural, Bump, Parallax, Metal };
+enum class Material { Diffuse, Mirror, Glass, Procedural, Bump, Parallax, Metal, Dispersive };
 
 struct ModelTriangle {
 	std::array<glm::vec3, 3> vertices{};
