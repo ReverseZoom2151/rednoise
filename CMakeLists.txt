@@ -81,6 +81,15 @@ if (BUILD_HEADLESS)
     add_executable(render_headless tools/render_headless.cpp ${ENGINE_SOURCES})
     target_include_directories(render_headless PRIVATE framework third_party src)
     link_openmp(render_headless)
+
+    # Fractal-terrain generator (only needs the noise module).
+    add_executable(gen_terrain tools/gen_terrain.cpp src/Noise.cpp)
+    target_include_directories(gen_terrain PRIVATE src third_party)
+
+    # Orbiting-camera animation to a PPM frame sequence.
+    add_executable(animate tools/animate.cpp ${ENGINE_SOURCES})
+    target_include_directories(animate PRIVATE framework third_party src)
+    link_openmp(animate)
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------

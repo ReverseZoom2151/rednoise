@@ -121,12 +121,12 @@ fully-shaded ray tracer and beyond.
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
 | More primitives | Spheres, planes, quadrics (ellipsoid/cone/cylinder) alongside triangles. | ●● | RT |
-| Extra meshes | Load spheres, bunny, logo, higher-poly Cornell scenes. | ● | 20 |
+| [done] Extra meshes | Load spheres, bunny, logo, higher-poly Cornell scenes. | ● | 20 |
 | Object transforms / instancing | Translate/scale/rotate matrices per object. | ●● | RT |
-| Animation system | Scripted camera/light choreography over frames. | ●● | 20 |
-| PPM sequence + video/GIF | Dump numbered frames, assemble to video (ffmpeg) or GIF. | ● | 20, 15 |
+| [done] Animation system | Scripted camera/light choreography over frames. | ●● | 20 |
+| [done] PPM sequence + video/GIF | Dump numbered frames, assemble to video (ffmpeg) or GIF. | ● | 20, 15 |
 | Level of detail / hierarchical models | Swap mesh detail by distance. | ●●● | 15 |
-| Fractal terrain / procedural scenes | Mountains, clouds, water via fractals/noise. | ●●●● | 15 |
+| [done] Fractal terrain / procedural scenes | Mountains, clouds, water via fractals/noise. | ●●●● | 15 |
 
 ## Moonshots (graded 100% in the unit's gallery)
 
