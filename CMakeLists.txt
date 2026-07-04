@@ -122,6 +122,7 @@ set(ENGINE_SOURCES
         src/Mipmap.cpp
         src/IrradianceCache.cpp
         src/Blackbody.cpp
+        src/QMC.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

@@ -8,6 +8,7 @@
 #include "Clouds.h"
 #include "Blackbody.h"
 #include "IrradianceCache.h"
+#include "QMC.h"
 #include "ColourUtil.h"
 #include "KdTree.h"
 #include "Lines.h"
@@ -24,6 +25,7 @@
 #include <Canvas.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <Utils.h>
+#include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
 #include <iostream>
@@ -311,6 +313,25 @@ static void testDeepScanModules() {
 	CHECK(cool.b > cool.r);                                                // 10000K bluish
 	CHECK(std::abs(neutral.r - neutral.b) < 0.2f);                         // 6500K near white
 	CHECK(blackbodyRGB(6500.0f, 2.0f).r > blackbodyRGB(6500.0f).r * 1.5f); // intensity scales
+
+	// QMC: Halton values in [0,1), more evenly spread than random (smaller max gap).
+	for (uint32_t i = 1; i <= 32; i++) {
+		CHECK(halton(0, i) >= 0.0f && halton(0, i) < 1.0f);
+		CHECK(halton(1, i) >= 0.0f && halton(1, i) < 1.0f);
+	}
+	CHECK(nearly(radicalInverse(2, 1), 0.5f)); // 1 in base 2 reverses to 0.5
+	glm::vec2 hs = hammersley(3, 16);
+	CHECK(hs.x >= 0.0f && hs.x < 1.0f && hs.y >= 0.0f && hs.y < 1.0f);
+	{
+		std::vector<float> h;
+		for (uint32_t i = 0; i < 16; i++)
+			h.push_back(halton(0, i + 1));
+		std::sort(h.begin(), h.end());
+		float maxGap = h.front();
+		for (size_t i = 1; i < h.size(); i++)
+			maxGap = std::max(maxGap, h[i] - h[i - 1]);
+		CHECK(maxGap < 0.2f); // low-discrepancy: no big empty gap
+	}
 }
 
 int main() {
