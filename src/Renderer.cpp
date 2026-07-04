@@ -3,6 +3,7 @@
 #include "BVH.h"
 #include "Drawing.h"
 #include "Geometry.h"
+#include "Light.h"
 #include "Noise.h"
 #include <algorithm>
 #include <array>
@@ -113,28 +114,71 @@ void renderRasterised(const std::vector<ModelTriangle> &model, const Camera &cam
 	}
 }
 
-// Diffuse (with ambient floor) + specular for one surface point and normal.
-struct Shade {
-	float brightness;
-	float specular;
-};
-
-static Shade lightPoint(const glm::vec3 &point, const glm::vec3 &normal, const glm::vec3 &viewDir,
-                        const glm::vec3 &light, bool inShadow) {
-	const float lightIntensity = 40.0f;
-	const float ambient = 0.2f;
-	glm::vec3 toLight = light - point;
-	float distance = glm::length(toLight);
-	glm::vec3 lightDir = toLight / distance;
-	float proximity = lightIntensity / (4.0f * 3.14159265f * distance * distance);
-	float incidence = std::max(0.0f, glm::dot(normal, lightDir));
-	float diffuse = inShadow ? 0.0f : proximity * incidence;
-	float specular = 0.0f;
-	if (!inShadow && incidence > 0.0f) {
-		glm::vec3 reflectDir = 2.0f * glm::dot(normal, lightDir) * normal - lightDir;
-		specular = std::pow(std::max(0.0f, glm::dot(reflectDir, viewDir)), 64.0f);
+// Fraction of a light visible from `point` (1 = lit, 0 = shadowed). Point and
+// directional lights are binary; an area light (radius > 0) is sampled over a
+// fixed disk for soft shadows (deterministic pattern, so no noise).
+static float visibility(const Light &L, const glm::vec3 &point, const BVH &bvh, int ignoreIndex) {
+	if (L.type == LightType::Directional) {
+		glm::vec3 dir = -glm::normalize(L.direction);
+		return bvh.occluded(point, dir, 1e6f, ignoreIndex) ? 0.0f : 1.0f;
 	}
-	return {std::min(1.0f, std::max(diffuse, ambient)), specular};
+	if (L.radius <= 0.0f) {
+		glm::vec3 to = L.position - point;
+		float dist = glm::length(to);
+		return bvh.occluded(point, to / dist, dist, ignoreIndex) ? 0.0f : 1.0f;
+	}
+	static const glm::vec2 kSamples[9] = {{0, 0},       {1, 0},        {-1, 0},       {0, 1},        {0, -1},
+	                                      {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
+	glm::vec3 axis = glm::normalize(point - L.position);
+	glm::vec3 up = std::abs(axis.y) < 0.99f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+	glm::vec3 tangent = glm::normalize(glm::cross(up, axis));
+	glm::vec3 bitangent = glm::cross(axis, tangent);
+	int unoccluded = 0;
+	for (const glm::vec2 &s : kSamples) {
+		glm::vec3 samplePos = L.position + (tangent * s.x + bitangent * s.y) * L.radius;
+		glm::vec3 to = samplePos - point;
+		float dist = glm::length(to);
+		if (!bvh.occluded(point, to / dist, dist, ignoreIndex))
+			unoccluded++;
+	}
+	return unoccluded / 9.0f;
+}
+
+// Multi-light shading of a surface point: proximity/incidence diffuse + specular
+// + soft-shadow visibility summed over every light, on an ambient floor. `base`
+// is the surface's own colour (0..255).
+static glm::vec3 shadeSurface(const glm::vec3 &point, const glm::vec3 &normal, const glm::vec3 &viewDir,
+                              const std::vector<Light> &lights, const BVH &bvh, int ignoreIndex,
+                              const glm::vec3 &base) {
+	const float ambient = 0.2f;
+	glm::vec3 diffuseAccum(0.0f);
+	float specAccum = 0.0f;
+	for (const Light &L : lights) {
+		glm::vec3 lightDir;
+		float attenuation;
+		if (L.type == LightType::Directional) {
+			lightDir = -glm::normalize(L.direction);
+			attenuation = L.intensity / 40.0f;
+		} else {
+			glm::vec3 to = L.position - point;
+			float dist = glm::length(to);
+			lightDir = to / dist;
+			attenuation = L.intensity / (4.0f * 3.14159265f * dist * dist);
+		}
+		float cone = 1.0f;
+		if (L.type == LightType::Spot)
+			cone = (glm::dot(-lightDir, glm::normalize(L.direction)) > L.coneCos) ? 1.0f : 0.0f;
+		float vis = visibility(L, point, bvh, ignoreIndex);
+		float incidence = std::max(0.0f, glm::dot(normal, lightDir));
+		float brightness = vis * cone * attenuation * incidence;
+		diffuseAccum += L.colour * brightness;
+		if (brightness > 0.0f) {
+			glm::vec3 reflectDir = 2.0f * glm::dot(normal, lightDir) * normal - lightDir;
+			specAccum += vis * cone * std::pow(std::max(0.0f, glm::dot(reflectDir, viewDir)), 64.0f);
+		}
+	}
+	glm::vec3 lit = glm::min(glm::vec3(1.0f), diffuseAccum + glm::vec3(ambient));
+	return base * lit + glm::vec3(255.0f) * std::min(1.0f, specAccum);
 }
 
 // Flip a normal to face the viewer (rayDirection points camera -> surface).
@@ -197,44 +241,19 @@ static glm::vec2 parallaxUV(const ModelTriangle &tri, glm::vec2 uv, const glm::v
 	return uv - offset;
 }
 
-static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
-                              const BVH &bvh, ShadingModel shading) {
+static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection,
+                              const std::vector<Light> &lights, const BVH &bvh, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
 	glm::vec3 point = hit.intersectionPoint;
 	glm::vec3 viewDir = -rayDirection;
-
-	// One shadow test at the hit point, shared by all shading models.
-	glm::vec3 toLight = light - point;
-	float lightDistance = glm::length(toLight);
-	glm::vec3 lightDir = toLight / lightDistance;
-	bool inShadow = bvh.occluded(point, lightDir, lightDistance, static_cast<int>(hit.triangleIndex));
+	int ignore = static_cast<int>(hit.triangleIndex);
 
 	// Barycentric weights (vertex 0 gets 1-u-v).
 	float w0 = 1.0f - hit.u - hit.v;
 	float w1 = hit.u;
 	float w2 = hit.v;
 
-	Shade shade;
-	if (shading == ShadingModel::Gouraud) {
-		Shade s0 =
-		    lightPoint(tri.vertices[0], faceViewer(tri.vertexNormals[0], rayDirection), viewDir, light, inShadow);
-		Shade s1 =
-		    lightPoint(tri.vertices[1], faceViewer(tri.vertexNormals[1], rayDirection), viewDir, light, inShadow);
-		Shade s2 =
-		    lightPoint(tri.vertices[2], faceViewer(tri.vertexNormals[2], rayDirection), viewDir, light, inShadow);
-		shade.brightness = w0 * s0.brightness + w1 * s1.brightness + w2 * s2.brightness;
-		shade.specular = w0 * s0.specular + w1 * s1.specular + w2 * s2.specular;
-	} else {
-		glm::vec3 normal =
-		    (shading == ShadingModel::Phong)
-		        ? glm::normalize(w0 * tri.vertexNormals[0] + w1 * tri.vertexNormals[1] + w2 * tri.vertexNormals[2])
-		        : tri.normal;
-		normal = faceViewer(normal, rayDirection);
-		if (tri.material == Material::Bump)
-			normal = bumpNormal(normal, point);
-		shade = lightPoint(point, normal, viewDir, light, inShadow);
-	}
-
+	// Base surface colour: texture, procedural, or flat.
 	glm::vec3 base;
 	if (tri.texture) {
 		float tu = w0 * tri.texturePoints[0].x + w1 * tri.texturePoints[1].x + w2 * tri.texturePoints[2].x;
@@ -250,13 +269,32 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 	} else {
 		base = glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue);
 	}
-	return base * shade.brightness + glm::vec3(255.0f) * shade.specular;
+
+	if (shading == ShadingModel::Gouraud) {
+		// Shade each vertex, then interpolate the resulting colour.
+		glm::vec3 c0 = shadeSurface(tri.vertices[0], faceViewer(tri.vertexNormals[0], rayDirection), viewDir, lights,
+		                            bvh, ignore, base);
+		glm::vec3 c1 = shadeSurface(tri.vertices[1], faceViewer(tri.vertexNormals[1], rayDirection), viewDir, lights,
+		                            bvh, ignore, base);
+		glm::vec3 c2 = shadeSurface(tri.vertices[2], faceViewer(tri.vertexNormals[2], rayDirection), viewDir, lights,
+		                            bvh, ignore, base);
+		return w0 * c0 + w1 * c1 + w2 * c2;
+	}
+
+	glm::vec3 normal =
+	    (shading == ShadingModel::Phong)
+	        ? glm::normalize(w0 * tri.vertexNormals[0] + w1 * tri.vertexNormals[1] + w2 * tri.vertexNormals[2])
+	        : tri.normal;
+	normal = faceViewer(normal, rayDirection);
+	if (tri.material == Material::Bump)
+		normal = bumpNormal(normal, point);
+	return shadeSurface(point, normal, viewDir, lights, bvh, ignore, base);
 }
 
 // Recursively trace a ray. Diffuse surfaces are shaded directly; mirrors reflect
 // and glass reflects + refracts (Fresnel-weighted), bounded by `depth`.
-static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const BVH &bvh, const glm::vec3 &light,
-                          ShadingModel shading, int depth) {
+static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const BVH &bvh,
+                          const std::vector<Light> &lights, ShadingModel shading, int depth) {
 	RayTriangleIntersection hit = bvh.intersect(origin, direction);
 	if (!hit.hit)
 		return environment(direction); // sky
@@ -266,7 +304,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 	if (depth > 0 && tri.material == Material::Mirror) {
 		glm::vec3 n = faceViewer(tri.normal, direction);
 		glm::vec3 reflected = glm::reflect(direction, n);
-		return traceRay(point + 1e-4f * reflected, reflected, bvh, light, shading, depth - 1);
+		return traceRay(point + 1e-4f * reflected, reflected, bvh, lights, shading, depth - 1);
 	}
 
 	if (depth > 0 && tri.material == Material::Glass) {
@@ -282,7 +320,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		}
 		float eta = etai / etat;
 		glm::vec3 reflected = glm::reflect(direction, n);
-		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, bvh, light, shading, depth - 1);
+		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, bvh, lights, shading, depth - 1);
 		glm::vec3 refracted = glm::refract(direction, n, eta);
 		if (glm::length(refracted) < 1e-6f)
 			return reflectionColour; // total internal reflection
@@ -290,21 +328,29 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		float r0 = (etai - etat) / (etai + etat);
 		r0 *= r0;
 		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
-		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, bvh, light, shading, depth - 1);
+		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, bvh, lights, shading, depth - 1);
 		return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
 	}
 
-	return shadeDiffuse(hit, direction, light, bvh, shading);
+	return shadeDiffuse(hit, direction, lights, bvh, shading);
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
-                     ShadingModel shading, const glm::vec3 &light) {
+                     ShadingModel shading, const std::vector<Light> &lights) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const int maxDepth = 4;
 	BVH bvh(model); // build the acceleration structure once per frame
+
+	// Default to one soft (area) light so shadows have a penumbra out of the box.
+	std::vector<Light> used = lights;
+	if (used.empty()) {
+		Light d;
+		d.radius = 0.15f;
+		used.push_back(d);
+	}
 
 	// Each pixel is independent, so the scanline loop parallelises cleanly.
 #pragma omp parallel for schedule(dynamic, 4)
@@ -314,7 +360,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			// direction, then rotate into world space.
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-			glm::vec3 colour = traceRay(camera.position, direction, bvh, light, shading, maxDepth);
+			glm::vec3 colour = traceRay(camera.position, direction, bvh, used, shading, maxDepth);
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));
