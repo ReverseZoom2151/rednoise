@@ -123,6 +123,7 @@ set(ENGINE_SOURCES
         src/IrradianceCache.cpp
         src/Blackbody.cpp
         src/QMC.cpp
+        src/Grid.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

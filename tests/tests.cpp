@@ -10,6 +10,7 @@
 #include "IrradianceCache.h"
 #include "QMC.h"
 #include "ColourUtil.h"
+#include "Grid.h"
 #include "KdTree.h"
 #include "Lines.h"
 #include "Materials.h"
@@ -217,17 +218,22 @@ static void testDeepScanModules() {
 		tris.push_back(
 		    ModelTriangle(glm::vec3(-1, -1, z), glm::vec3(1, -1, z), glm::vec3(0, 1, z), Colour(200, 100, 50)));
 	}
-	// Octree + KdTree must agree with the trusted BVH on hit + occlusion.
+	// Octree + KdTree + Grid must agree with the trusted BVH on hit + occlusion.
 	BVH bvh(tris);
 	Octree oct(tris);
 	KdTree kd(tris);
+	Grid gr(tris);
 	glm::vec3 o(0.0f, 0.0f, 2.0f), d(0.0f, 0.0f, -1.0f);
-	RayTriangleIntersection hb = bvh.intersect(o, d), ho = oct.intersect(o, d), hk = kd.intersect(o, d);
-	CHECK(hb.hit && ho.hit && hk.hit);
-	CHECK(ho.triangleIndex == hb.triangleIndex && hk.triangleIndex == hb.triangleIndex);
-	CHECK(nearly(ho.distanceFromCamera, hb.distanceFromCamera) && nearly(hk.distanceFromCamera, hb.distanceFromCamera));
+	RayTriangleIntersection hb = bvh.intersect(o, d), ho = oct.intersect(o, d), hk = kd.intersect(o, d),
+	                        hg = gr.intersect(o, d);
+	CHECK(hb.hit && ho.hit && hk.hit && hg.hit);
+	CHECK(ho.triangleIndex == hb.triangleIndex && hk.triangleIndex == hb.triangleIndex &&
+	      hg.triangleIndex == hb.triangleIndex);
+	CHECK(nearly(ho.distanceFromCamera, hb.distanceFromCamera) &&
+	      nearly(hk.distanceFromCamera, hb.distanceFromCamera) && nearly(hg.distanceFromCamera, hb.distanceFromCamera));
 	CHECK(oct.occluded(o, d, 10.0f, -1) == bvh.occluded(o, d, 10.0f, -1));
 	CHECK(kd.occluded(o, d, 10.0f, -1) == bvh.occluded(o, d, 10.0f, -1));
+	CHECK(gr.occluded(o, d, 10.0f, -1) == bvh.occluded(o, d, 10.0f, -1));
 
 	// Meshing: Delaunay circumcircle predicate + point cloud + decimation.
 	std::vector<glm::vec2> pts = {{0, 0}, {1, 0}, {0, 1}, {1, 1}, {0.5f, 0.5f}, {0.2f, 0.8f}};
