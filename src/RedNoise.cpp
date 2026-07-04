@@ -15,7 +15,6 @@
 #include <TextureMap.h>
 #include <ModelTriangle.h>
 #include <sstream>
-#include <glm/gtx/string_cast.hpp>
 #include <map>
 #include <string>
 

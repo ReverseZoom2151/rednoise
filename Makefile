@@ -2,8 +2,8 @@ PROJECT_NAME := RedNoise
 BUILD_DIR    := build
 EXECUTABLE   := $(BUILD_DIR)/$(PROJECT_NAME)
 
-# All translation units: the app, the glm instantiation unit, and the framework.
-SOURCE_FILES := src/RedNoise.cpp third_party/glm/glm.cpp $(wildcard framework/*.cpp)
+# All translation units: the app and the framework (glm 1.0.1 is header-only).
+SOURCE_FILES := src/RedNoise.cpp $(wildcard framework/*.cpp)
 
 # Build settings
 COMPILER         := clang++

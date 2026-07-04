@@ -23,7 +23,6 @@ file(GLOB FRAMEWORK_SOURCES CONFIGURE_DEPENDS framework/*.cpp)
 
 add_executable(RedNoise
         src/RedNoise.cpp
-        third_party/glm/glm.cpp
         ${FRAMEWORK_SOURCES})
 
 target_include_directories(RedNoise PRIVATE
