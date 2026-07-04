@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
+#include <utility>
 #include <vector>
 
 // Project a triangle's three vertices. Returns false if any vertex is level with
@@ -111,8 +112,8 @@ static glm::vec3 faceViewer(glm::vec3 normal, const glm::vec3 &rayDirection) {
 	return (glm::dot(normal, rayDirection) > 0.0f) ? -normal : normal;
 }
 
-static uint32_t shadeHit(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
-                         const std::vector<ModelTriangle> &model, ShadingModel shading) {
+static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
+                              const std::vector<ModelTriangle> &model, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
 	glm::vec3 point = hit.intersectionPoint;
 	glm::vec3 viewDir = -rayDirection;
@@ -149,10 +150,51 @@ static uint32_t shadeHit(const RayTriangleIntersection &hit, const glm::vec3 &ra
 	}
 
 	const Colour &c = tri.colour;
-	int r = std::min(255, static_cast<int>(c.red * shade.brightness + 255.0f * shade.specular));
-	int g = std::min(255, static_cast<int>(c.green * shade.brightness + 255.0f * shade.specular));
-	int b = std::min(255, static_cast<int>(c.blue * shade.brightness + 255.0f * shade.specular));
-	return (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+	return glm::vec3(c.red, c.green, c.blue) * shade.brightness + glm::vec3(255.0f) * shade.specular;
+}
+
+// Recursively trace a ray. Diffuse surfaces are shaded directly; mirrors reflect
+// and glass reflects + refracts (Fresnel-weighted), bounded by `depth`.
+static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const std::vector<ModelTriangle> &model,
+                          const glm::vec3 &light, ShadingModel shading, int depth) {
+	RayTriangleIntersection hit = getClosestIntersection(origin, direction, model);
+	if (!hit.hit)
+		return glm::vec3(0.0f); // background
+	const ModelTriangle &tri = hit.intersectedTriangle;
+	glm::vec3 point = hit.intersectionPoint;
+
+	if (depth > 0 && tri.material == Material::Mirror) {
+		glm::vec3 n = faceViewer(tri.normal, direction);
+		glm::vec3 reflected = glm::reflect(direction, n);
+		return traceRay(point + 1e-4f * reflected, reflected, model, light, shading, depth - 1);
+	}
+
+	if (depth > 0 && tri.material == Material::Glass) {
+		const float ior = 1.5f;
+		glm::vec3 n = tri.normal;
+		float cosi = glm::dot(direction, n);
+		float etai = 1.0f, etat = ior;
+		if (cosi < 0.0f) {
+			cosi = -cosi; // ray entering the surface
+		} else {
+			std::swap(etai, etat); // ray exiting: flip the normal to oppose it
+			n = -n;
+		}
+		float eta = etai / etat;
+		glm::vec3 reflected = glm::reflect(direction, n);
+		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, model, light, shading, depth - 1);
+		glm::vec3 refracted = glm::refract(direction, n, eta);
+		if (glm::length(refracted) < 1e-6f)
+			return reflectionColour; // total internal reflection
+		// Schlick's Fresnel approximation.
+		float r0 = (etai - etat) / (etai + etat);
+		r0 *= r0;
+		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
+		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, model, light, shading, depth - 1);
+		return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
+	}
+
+	return shadeDiffuse(hit, direction, light, model, shading);
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
@@ -161,6 +203,7 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
+	const int maxDepth = 4;
 
 	for (int y = 0; y < H; y++) {
 		for (int x = 0; x < W; x++) {
@@ -168,9 +211,11 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			// direction, then rotate into world space.
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-			RayTriangleIntersection hit = getClosestIntersection(camera.position, direction, model);
-			if (hit.hit)
-				canvas.setPixelColour(x, y, shadeHit(hit, direction, light, model, shading));
+			glm::vec3 colour = traceRay(camera.position, direction, model, light, shading, maxDepth);
+			int r = std::min(255, static_cast<int>(colour.r));
+			int g = std::min(255, static_cast<int>(colour.g));
+			int b = std::min(255, static_cast<int>(colour.b));
+			canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
 		}
 	}
 }

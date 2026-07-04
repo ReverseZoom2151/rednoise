@@ -69,9 +69,9 @@ fully-shaded ray tracer and beyond.
 
 | Build | What it adds | Diff | Seen in |
 | --- | --- | --- | --- |
-| Mirror reflection | Recursive reflected ray for `Mirror` materials (our MTL already names them). | ●●● | 20, CG, RT |
-| Glass refraction | Snell's-law transmitted ray with a recursion-depth cap. | ●●● | 20, RT |
-| Fresnel blend | Mix reflection and refraction by view angle for realistic glass. | ●●● | 20 |
+| [done] Mirror reflection | Recursive reflected ray for `Mirror` materials (our MTL already names them). | ●●● | 20, CG, RT |
+| [done] Glass refraction | Snell's-law transmitted ray with a recursion-depth cap. | ●●● | 20, RT |
+| [done] Fresnel blend | Mix reflection and refraction by view angle for realistic glass. | ●●● | 20 |
 | Raytraced texture sampling | Barycentric UV lookup at the hit point (extends our raster textures). | ●● | 20 |
 | Normal / bump mapping | Perturb normals from a texture for surface detail. | ●●● | 15 |
 | Parallax mapping | Depth-parallax on textured surfaces. | ●●●● | 15 |
