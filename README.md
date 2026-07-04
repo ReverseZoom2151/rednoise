@@ -224,12 +224,16 @@ A single front-end wraps the common jobs and writes web-ready PNG (or PPM):
 ./build/rn render assets/cornell-box.obj -o out.png --mode pathtraced --spp 128 --size 640x480
 ./build/rn render assets/cornell-box.obj -o quick.png --mode raytraced
 ./build/rn animate assets/cornell-box.obj --frames 48 --ease reciprocal -o frame
+./build/rn shell assets/cornell-box.obj    # interactive: load once, tweak, re-render
 ./build/rn version
-./build/rn help
+./build/rn help                            # or 'rn render --help' for a command
 ```
 
 Render modes: `wireframe`, `rasterised`, `raytraced`, `pathtraced`, `photon`,
 `radiosity`. Output format follows the `-o` extension (`.png` default, or `.ppm`).
+The parser is a small native C++23 one (no dependency): it gives per-command
+help, "did you mean" suggestions for typos, and clig.dev-style errors/exit codes.
+`rn shell` opens a REPL (`load`, `mode`, `spp`, `size`, `cam`, `render`, `exit`).
 
 ### GPU path tracer (OpenCL)
 

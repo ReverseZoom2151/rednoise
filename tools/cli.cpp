@@ -21,6 +21,7 @@
 #include <glm/glm.hpp>
 #include <iostream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -55,6 +56,7 @@ const std::vector<rncli::Command> COMMANDS = {
          {"ease", '\0', false, "MODE", "linear|smooth|reciprocal", "reciprocal"},
          {"size", 's', false, "WxH", "frame size", "320x240"},
      }},
+    {"shell", "interactive REPL: load a scene once, then re-render", "[obj]", {}},
 };
 
 bool useColour() {
@@ -120,6 +122,30 @@ void save(const Canvas &c, const std::string &path) {
 		c.savePNG(path);
 }
 
+constexpr std::string_view MODES = "wireframe rasterised raytraced pathtraced photon radiosity";
+
+// Render `model` into `canvas` using the named mode. Returns false on unknown mode.
+bool renderMode(const std::vector<ModelTriangle> &model, const std::string &mode, int w, int h, float camZ, int spp,
+                Canvas &canvas) {
+	Camera camera(w, h, 2.0f, glm::vec3(0.0f, 0.0f, camZ));
+	camera.lookAt(glm::vec3(0.0f));
+	if (mode == "wireframe")
+		renderWireframe(model, camera, canvas);
+	else if (mode == "rasterised" || mode == "rasterized")
+		renderRasterised(model, camera, canvas);
+	else if (mode == "raytraced")
+		renderRaytraced(model, camera, canvas);
+	else if (mode == "pathtraced")
+		renderPathTraced(model, camera, canvas, spp);
+	else if (mode == "photon")
+		renderPhotonMapped(model, camera, canvas, 200000);
+	else if (mode == "radiosity")
+		renderRadiosity(model, camera, canvas);
+	else
+		return false;
+	return true;
+}
+
 int doRender(const rncli::Parsed &p) {
 	if (p.positionals.empty()) {
 		reportError({"render: missing <obj> argument", std::nullopt, 2});
@@ -137,24 +163,9 @@ int doRender(const rncli::Parsed &p) {
 		reportError({"render: no triangles loaded from " + obj, std::nullopt, 1});
 		return 1;
 	}
-	Camera camera(w, h, 2.0f, glm::vec3(0.0f, 0.0f, camZ));
-	camera.lookAt(glm::vec3(0.0f));
 	Canvas canvas(w, h);
-	if (mode == "wireframe")
-		renderWireframe(model, camera, canvas);
-	else if (mode == "rasterised" || mode == "rasterized")
-		renderRasterised(model, camera, canvas);
-	else if (mode == "raytraced")
-		renderRaytraced(model, camera, canvas);
-	else if (mode == "pathtraced")
-		renderPathTraced(model, camera, canvas, spp);
-	else if (mode == "photon")
-		renderPhotonMapped(model, camera, canvas, 200000);
-	else if (mode == "radiosity")
-		renderRadiosity(model, camera, canvas);
-	else {
-		reportError({"render: unknown mode '" + mode + "'",
-		             "modes: wireframe rasterised raytraced pathtraced photon radiosity", 2});
+	if (!renderMode(model, mode, w, h, camZ, spp, canvas)) {
+		reportError({"render: unknown mode '" + mode + "'", "modes: " + std::string(MODES), 2});
 		return 2;
 	}
 	save(canvas, out);
@@ -217,6 +228,107 @@ int doAnimate(const rncli::Parsed &p) {
 	return 0;
 }
 
+// Interactive REPL: load a scene once, tweak state, re-render. A plain getline
+// loop dispatching through the same engine calls - no external line-editor.
+int doShell(const rncli::Parsed &p) {
+	std::vector<ModelTriangle> model;
+	std::string loaded, mode = "raytraced";
+	int spp = 64, w = 640, h = 480;
+	float camZ = 4.0f, scale = 0.35f;
+	static const std::vector<std::string_view> MODE_LIST = {"wireframe",  "rasterised", "raytraced",
+	                                                        "pathtraced", "photon",     "radiosity"};
+	static const std::vector<std::string_view> CMDS = {"load",   "mode", "spp",  "size", "cam", "scale",
+	                                                   "render", "show", "help", "exit", "quit"};
+
+	auto loadScene = [&](const std::string &path) {
+		auto m = loadOBJ(path, scale);
+		if (m.empty()) {
+			std::cout << "  could not load '" << path << "'\n";
+			return;
+		}
+		model = std::move(m);
+		loaded = path;
+		std::cout << "  loaded " << model.size() << " triangles from " << path << "\n";
+	};
+	auto showState = [&] {
+		std::cout << "  scene=" << (loaded.empty() ? "(none)" : loaded) << " mode=" << mode << " size=" << w << "x" << h
+		          << " spp=" << spp << " cam-z=" << camZ << " scale=" << scale << "\n";
+	};
+
+	if (!p.positionals.empty())
+		loadScene(std::string(p.positionals[0]));
+	std::cout << "RedNoise interactive shell. Type 'help' for commands, 'exit' to quit.\n";
+
+	std::string line;
+	while (true) {
+		std::cout << "rednoise> " << std::flush;
+		if (!std::getline(std::cin, line)) {
+			std::cout << "\n";
+			break;
+		}
+		std::vector<std::string> tok;
+		std::istringstream iss(line);
+		for (std::string word; iss >> word;)
+			tok.push_back(word);
+		if (tok.empty())
+			continue;
+		const std::string &c = tok[0];
+		auto arg = [&](size_t i) { return i < tok.size() ? tok[i] : std::string(); };
+
+		if (c == "exit" || c == "quit")
+			break;
+		else if (c == "help")
+			std::cout << "  load <obj>        load a scene\n"
+			             "  mode <mode>       "
+			          << MODES
+			          << "\n"
+			             "  spp <n>           samples/pixel (pathtraced)\n"
+			             "  size <WxH>        image size\n"
+			             "  cam <z>           camera distance on +Z\n"
+			             "  scale <s>         OBJ load scale (reload to apply)\n"
+			             "  render [out.png]  render with the current settings\n"
+			             "  show              print current settings\n"
+			             "  exit              leave the shell\n";
+		else if (c == "load") {
+			if (arg(1).empty())
+				std::cout << "  usage: load <obj>\n";
+			else
+				loadScene(arg(1));
+		} else if (c == "mode") {
+			if (std::ranges::find(MODE_LIST, arg(1)) != MODE_LIST.end())
+				mode = arg(1);
+			else
+				std::cout << "  unknown mode '" << arg(1) << "'. modes: " << MODES << "\n";
+		} else if (c == "spp")
+			spp = std::max(1, std::atoi(arg(1).c_str()));
+		else if (c == "size")
+			parseSize(arg(1), w, h);
+		else if (c == "cam")
+			camZ = std::strtof(arg(1).c_str(), nullptr);
+		else if (c == "scale")
+			scale = std::strtof(arg(1).c_str(), nullptr);
+		else if (c == "show")
+			showState();
+		else if (c == "render") {
+			if (model.empty()) {
+				std::cout << "  no scene loaded (use 'load <obj>')\n";
+				continue;
+			}
+			std::string out = arg(1).empty() ? "out.png" : arg(1);
+			Canvas canvas(w, h);
+			renderMode(model, mode, w, h, camZ, spp, canvas);
+			save(canvas, out);
+			std::cout << "  wrote " << out << " (" << w << "x" << h << ", " << mode << ")\n";
+		} else {
+			std::cout << "  unknown command '" << c << "'";
+			if (auto s = rncli::nearest(c, CMDS))
+				std::cout << " (did you mean '" << *s << "'?)";
+			std::cout << "\n";
+		}
+	}
+	return 0;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -244,5 +356,7 @@ int main(int argc, char **argv) {
 		return doRender(p);
 	if (p.command == "animate")
 		return doAnimate(p);
+	if (p.command == "shell")
+		return doShell(p);
 	return 1;
 }
