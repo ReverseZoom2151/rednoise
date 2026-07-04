@@ -1,54 +1,71 @@
-# RedNoise: Graphics Rendering Toolkit
+# RedNoise: a software renderer
 
-A small **C++ software rasteriser** built while working through the fundamentals of
-computer graphics. It draws directly into a pixel buffer (no GPU, no OpenGL) and
-presents it with **SDL3**, using **glm** for vector/matrix maths. It's an educational
-codebase: each feature is a self-contained step, from setting individual pixels to
-loading and colouring OBJ models.
+A CPU software renderer written in C++23. It draws into a plain pixel buffer (no
+GPU, no OpenGL) and, for the interactive app, presents it with SDL3; it uses glm
+for vector and matrix maths. It began as the University of Bristol computer
+graphics coursework ("RedNoise" is the first milestone) and grew into a full
+renderer: a rasteriser, a Whitted ray tracer, a Monte-Carlo path tracer, and a
+photon mapper, all rendering the Cornell box.
+
+Everything is verified end to end: the SDL-free engine is unit-tested and
+rendered headlessly in CI, which uploads the resulting images as build
+artifacts.
 
 ## Features
 
-- **Direct pixel manipulation**: the "red noise" demo that gives the project its name.
-- **Interpolation**: single-float and 3-element (vec3) linear interpolation, used for
-  greyscale and 2D colour gradients.
-- **Drawing primitives**: DDA line drawing; stroked, filled, and random triangles.
-- **Texture mapping**: affine texture-mapped triangles sampled from a PPM image.
-- **OBJ / MTL loading**: parses Wavefront `.obj` geometry and resolves its `.mtl`
-  material colours (`mtllib` / `usemtl`).
-- **Interactive window**: SDL3 event handling for keyboard/mouse input and PPM/BMP
-  screenshots.
+Rendering modes:
 
-## Project structure
+- Wireframe, and a z-buffered rasteriser (near-plane clipping, optional backface
+  culling, and a shadow-mapping variant).
+- Whitted ray tracer: reflection, refraction, Fresnel, hard and soft shadows.
+- Monte-Carlo path tracer: global illumination (colour bleeding), soft shadows,
+  and anti-aliasing together.
+- Photon mapper: indirect light and caustics.
 
-```
-redNoise/
-├── src/
-│   └── RedNoise.cpp        # application: demos, drawing, OBJ loading, main loop
-├── framework/             # the "sdw" teaching framework (headers + sources together)
-│   ├── DrawingWindow.*     # SDL3 window + pixel buffer, save/poll
-│   ├── CanvasPoint.*  CanvasTriangle.*  Colour.*
-│   ├── ModelTriangle.*  TextureMap.*  TexturePoint.*  Utils.*
-├── third_party/
-│   └── glm/               # vendored glm 1.0.1 (header-only, trimmed)
-├── assets/                # cornell-box.obj/.mtl, texture.ppm
-├── CMakeLists.txt         # primary build
-├── Makefile               # alternative build (clang++ + pkg-config)
-└── THIRD_PARTY_NOTICES.md
-```
+Shading and lighting:
+
+- Flat, Gouraud, and Phong shading with per-vertex normals.
+- Proximity + angle-of-incidence diffuse, specular highlights, ambient floor.
+- Point, directional, and spot lights; area lights give soft shadows.
+
+Materials:
+
+- Diffuse, mirror, glass (Snell + Fresnel), and metallic/roughness (PBR).
+- Textured (Wavefront `map_Kd`), procedural (Perlin) and bump/parallax mapping.
+
+Geometry and scenes:
+
+- OBJ/MTL loading with per-vertex normals; analytic spheres alongside triangles.
+- Object transforms, instancing, and distance-based level of detail.
+- A fractal-terrain (Perlin heightfield) generator.
+
+Camera and image:
+
+- Perspective projection, lookAt, orbit, free-fly, and mouse-look.
+- Depth of field and motion blur (in the path tracer).
+- Tone-mapping and FXAA post-filters; supersampling anti-aliasing.
+
+Performance and output:
+
+- A BVH acceleration structure and OpenMP multithreading.
+- PPM/BMP screenshots and numbered PPM frame sequences for video.
+
+See [ROADMAP.md](ROADMAP.md) for the phased build history and the few remaining
+items (all GPU/OpenCL, which need hardware this project does not target).
 
 ## Dependencies
 
 | Dependency | Version | How it's provided |
 |------------|---------|-------------------|
-| [SDL3](https://www.libsdl.org) | 3.x | System library (vcpkg / package manager) |
+| [SDL3](https://www.libsdl.org) | 3.x | System library (vcpkg / package manager); only the interactive app needs it |
 | [glm](https://github.com/g-truc/glm) | 1.0.1 | Vendored in `third_party/glm` (nothing to install) |
+| [OpenMP](https://www.openmp.org) | optional | Multithreads the tracers; a missing OpenMP just runs single-threaded |
 
 A C++23 compiler is required (GCC 13+, Clang 17+, or MSVC 19.34+).
 
 ## Building
 
-Run the program **from the repository root** so that the relative `assets/` paths
-resolve.
+Run any binary from the repository root so the relative `assets/` paths resolve.
 
 ### CMake (recommended, cross-platform)
 
@@ -77,44 +94,68 @@ make production # optimised build
 make clean
 ```
 
-### Headless rendering (no SDL3)
+### Headless renderer and tools (no SDL3)
 
-The renderer also builds without a window, writing the frame straight to PPM.
-This is what CI runs, and it needs no SDL3:
+The engine builds without a window. This is what CI runs; it needs no SDL3:
 
 ```sh
 cmake -B build -S . -DBUILD_APP=OFF
 cmake --build build
-./build/render_headless assets/cornell-box.obj render
-# writes render-wireframe.ppm, render-rasterised.ppm, render-raytraced.ppm
+ctest --test-dir build --output-on-failure          # unit tests
+
+./build/render_headless assets/cornell-box.obj out   # wireframe/rasterised/raytraced PPMs
+./build/render_headless assets/cornell-box.obj out 64 # + a 64-sample path-traced PPM
+./build/gen_terrain assets/terrain.obj               # generate a fractal terrain mesh
+./build/animate assets/cornell-box.obj frame 36      # orbiting camera -> frame-000.ppm ...
 ```
 
-## Controls
+## Controls (interactive app)
 
 | Input | Action |
 |-------|--------|
-| `1` / `2` / `3` | Wireframe / rasterised / raytraced render mode |
-| `W` `A` `S` `D` `Q` `E` | Move the camera (x, y, z) |
-| Arrow keys | Rotate the camera (pan / tilt) |
-| `L` | Aim the camera at the scene centre (lookAt) |
-| `O` | Toggle orbit |
-| `R` | Reset the camera |
-| Mouse click | Save the frame to `output.ppm` |
+| `1` / `2` / `3` / `G` | Wireframe / rasterised / ray-traced / path-traced |
+| `4` / `5` / `6` | Flat / Gouraud / Phong shading (ray tracer) |
+| `W` `A` `S` `D` `Q` `E` | Move the camera |
+| Arrow keys, or left-drag | Rotate the camera (pan / tilt) |
+| `L` / `O` / `R` | Aim at the scene centre / toggle orbit / reset |
+| `C` | Toggle backface culling (rasteriser) |
+| `P` | Save the frame to `output.ppm` |
 | `Esc` | Quit |
 
-## Status & roadmap
+## Project structure
 
-The Cornell box now renders in 3D three ways: wireframe, a z-buffered rasteriser,
-and a flat ray tracer (ray-triangle closest-hit), all driven by a movable
-perspective camera. Next up is shading and lighting: hard shadows, diffuse and
-ambient light, then specular/Gouraud/Phong.
+```
+redNoise/
+├── src/                    # the renderer engine + application
+│   ├── RedNoise.cpp        #   application: window loop, input, render-mode switch
+│   ├── Camera / Renderer   #   projection; wireframe/raster/ray/path/photon renderers
+│   ├── Geometry / BVH / Scene    #   intersection, acceleration, analytic primitives
+│   ├── Light / Photon / Noise    #   lights, photon map, Perlin noise
+│   ├── ObjLoader / Transform     #   OBJ/MTL loading, instancing, LOD
+│   └── Interpolation / Drawing   #   maths + line/triangle/texture drawing
+├── framework/             # the "sdw" teaching framework (headers + sources together)
+│   ├── DrawingWindow.*     #   SDL3 window (the only SDL dependency)
+│   ├── Canvas.*            #   SDL-free pixel buffer + PPM save
+│   └── CanvasPoint.* CanvasTriangle.* Colour.* ModelTriangle.*
+│       RayTriangleIntersection.* TextureMap.* TexturePoint.* Utils.*
+├── third_party/glm/       # vendored glm 1.0.1 (header-only, trimmed)
+├── tools/                 # render_headless, gen_terrain, animate
+├── tests/                 # CTest unit tests (SDL-free)
+├── assets/                # cornell-box.obj/.mtl, sphere.obj, terrain.obj, texture.ppm
+├── .github/workflows/     # CI: format check, tests, render, syntax check
+├── CMakeLists.txt · Makefile · CMakePresets.json
+```
 
-See [ROADMAP.md](ROADMAP.md) for the full phased build plan, from the current
-renderer up through Phong shading, reflection/refraction, soft shadows,
-acceleration structures, and global illumination.
+## Editor setup
 
-## Credits
+The repo ships a `compile_flags.txt` so clangd resolves the `framework/`,
+`third_party/`, and `src/` include paths without a build. Building once
+(`cmake -B build`) additionally writes `build/compile_commands.json`, which
+clangd prefers and which carries your machine's SDL3 include path.
+
+## Credits and licence
 
 The `framework/` "sdw" classes originate from the University of Bristol Computer
-Graphics unit (COMS30020). Third-party licenses are listed in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Graphics unit (COMS30020). The project's own code is under the MIT
+[LICENSE](LICENSE); vendored dependencies keep their own licences, listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
