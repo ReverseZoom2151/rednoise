@@ -35,6 +35,11 @@ void renderStencilShadowVolumes(const std::vector<ModelTriangle> &model, const C
 // soft shadows for area lights), adding specular and an ambient floor; mirror
 // and glass materials reflect / refract recursively. An empty `lights` uses a
 // single default soft area light.
+// Enable/disable the physically-based atmospheric sky as the ray/path tracer
+// background (miss rays). sunDir is the direction TO the sun; pass (0,0,0) to
+// keep the current sun. When disabled, a simple gradient sky is used.
+void setSkyModel(bool enabled, const glm::vec3 &sunDir = glm::vec3(0.0f));
+
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
                      ShadingModel shading = ShadingModel::Phong, const std::vector<Light> &lights = {},
                      const Primitives &prims = {}, float fogDensity = 0.0f,

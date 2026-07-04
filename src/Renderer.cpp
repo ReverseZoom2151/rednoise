@@ -6,6 +6,7 @@
 #include "Light.h"
 #include "Noise.h"
 #include "Photon.h"
+#include "Sky.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -483,7 +484,24 @@ static glm::vec3 faceViewer(glm::vec3 normal, const glm::vec3 &rayDirection) {
 }
 
 // A simple procedural sky: rays that escape the scene sample this instead of black.
+// Optional physically-based sky (Rayleigh + Mie); off by default, enabled via
+// setSkyModel. Its radiance has a huge dynamic range, so we expose + tone-map it.
+static bool g_skyEnabled = false;
+static glm::vec3 g_skySun = glm::normalize(glm::vec3(0.3f, 0.45f, -1.0f));
+static float g_skyExposure = 16.0f;
+
+void setSkyModel(bool enabled, const glm::vec3 &sunDir) {
+	g_skyEnabled = enabled;
+	if (glm::length(sunDir) > 1e-4f)
+		g_skySun = glm::normalize(sunDir);
+}
+
 static glm::vec3 environment(const glm::vec3 &direction) {
+	if (g_skyEnabled) {
+		glm::vec3 c = skyColour(direction, g_skySun) * g_skyExposure;
+		c = c / (c + glm::vec3(1.0f)); // Reinhard over the wide sky/sun range
+		return c * 255.0f;
+	}
 	float t = 0.5f * (direction.y + 1.0f);
 	return glm::mix(glm::vec3(200.0f, 210.0f, 235.0f), glm::vec3(70.0f, 120.0f, 205.0f), t);
 }
