@@ -6,6 +6,7 @@
 #include "Geometry.h"
 #include "Interpolation.h"
 #include "Clouds.h"
+#include "IrradianceCache.h"
 #include "ColourUtil.h"
 #include "KdTree.h"
 #include "Lines.h"
@@ -258,6 +259,16 @@ static void testDeepScanModules() {
 	glm::vec3 rgb(0.3f, 0.7f, 0.2f);
 	glm::vec3 back = hsvToRgb(rgbToHsv(rgb));
 	CHECK(std::abs(back.r - rgb.r) < 0.01f && std::abs(back.g - rgb.g) < 0.01f && std::abs(back.b - rgb.b) < 0.01f);
+
+	// Irradiance cache: a stored record is reused nearby, missed far away.
+	IrradianceCache icache;
+	glm::vec3 up(0, 1, 0);
+	icache.store(glm::vec3(0, 0, 0), up, glm::vec3(0.5f, 0.3f, 0.7f), 1.0f);
+	glm::vec3 got;
+	CHECK(icache.lookup(glm::vec3(0.05f, 0, 0.05f), up, got)); // near + same normal -> hit
+	CHECK(std::abs(got.r - 0.5f) < 0.01f && std::abs(got.b - 0.7f) < 0.01f);
+	CHECK(!icache.lookup(glm::vec3(5, 0, 5), up, got));      // far -> miss
+	CHECK(!icache.lookup(glm::vec3(0.05f, 0, 0), -up, got)); // opposing normal -> miss
 
 	// Mipmap pyramid: a checkerboard averages toward grey at coarse levels.
 	TextureMap checker;

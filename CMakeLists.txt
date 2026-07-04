@@ -119,6 +119,7 @@ set(ENGINE_SOURCES
         src/ColourUtil.cpp
         src/Lines.cpp
         src/Mipmap.cpp
+        src/IrradianceCache.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
