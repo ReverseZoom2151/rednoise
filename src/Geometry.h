@@ -5,12 +5,15 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-// Geometric normal of a triangle (not normalised-dependent on winding order).
+// Geometric normal of a triangle.
 glm::vec3 triangleNormal(const ModelTriangle &triangle);
 
-// Cast a ray (origin + t*direction, t > 0) against every triangle and return the
-// closest valid hit. `intersection.hit` is false when nothing was hit. If
-// `ignoreIndex` is non-negative, that triangle is skipped (useful for shadow
-// rays that would otherwise self-intersect the originating surface).
+// Ray-triangle test (matrix-inverse barycentric solve). Returns true and fills
+// t (distance), u, v (barycentric) on a valid front hit (t > epsilon).
+bool intersectTriangle(const glm::vec3 &origin, const glm::vec3 &direction, const ModelTriangle &triangle, float &t,
+                       float &u, float &v);
+
+// Brute-force closest hit over every triangle. `intersection.hit` is false when
+// nothing was hit; `ignoreIndex` skips one triangle (e.g. for shadow rays).
 RayTriangleIntersection getClosestIntersection(const glm::vec3 &origin, const glm::vec3 &direction,
                                                const std::vector<ModelTriangle> &triangles, int ignoreIndex = -1);

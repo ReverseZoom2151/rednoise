@@ -1,6 +1,7 @@
 // Minimal dependency-free unit tests for the SDL-independent logic
 // (interpolation, string splitting, OBJ/MTL parsing). Run via CTest.
 
+#include "BVH.h"
 #include "Camera.h"
 #include "Geometry.h"
 #include "Interpolation.h"
@@ -131,6 +132,31 @@ static void testTriangleNormal() {
 	CHECK(nearly(std::fabs(n.z), 1.0f)); // triangle lies in the z=0 plane
 }
 
+static void testBVH() {
+	std::vector<ModelTriangle> model = loadOBJ("assets/cornell-box.obj", 0.35f);
+	CHECK(!model.empty());
+	BVH bvh(model);
+	glm::vec3 origin(0.0f, 0.0f, 4.0f);
+	int hits = 0, mismatches = 0;
+	// A grid of rays fanned across the scene: the BVH must agree with brute force.
+	for (int i = 0; i < 400; i++) {
+		float a = (i % 20) / 20.0f - 0.5f;
+		float b = (i / 20) / 20.0f - 0.5f;
+		glm::vec3 dir = glm::normalize(glm::vec3(a, b, -1.0f));
+		RayTriangleIntersection brute = getClosestIntersection(origin, dir, model);
+		RayTriangleIntersection acc = bvh.intersect(origin, dir);
+		CHECK(brute.hit == acc.hit);
+		if (brute.hit && acc.hit) {
+			hits++;
+			if (brute.triangleIndex != acc.triangleIndex ||
+			    std::fabs(brute.distanceFromCamera - acc.distanceFromCamera) > 1e-3f)
+				mismatches++;
+		}
+	}
+	CHECK(hits > 0);
+	CHECK(mismatches == 0);
+}
+
 int main() {
 	testInterpolateSingleFloats();
 	testInterpolateThreeElementValues();
@@ -141,6 +167,7 @@ int main() {
 	testCameraLookAt();
 	testTriangleIntersection();
 	testTriangleNormal();
+	testBVH();
 
 	if (failures == 0) {
 		std::cout << "All tests passed\n";

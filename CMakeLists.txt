@@ -24,6 +24,15 @@ option(BUILD_APP "Build the RedNoise application (requires SDL3)" ON)
 option(BUILD_TESTS "Build the unit tests" ON)
 option(BUILD_HEADLESS "Build the headless PPM renderer (no SDL3)" ON)
 
+# Optional: multithread the ray tracer. Correctness does not depend on it, so a
+# missing OpenMP just falls back to single-threaded.
+find_package(OpenMP QUIET)
+function(link_openmp target)
+    if (OpenMP_CXX_FOUND)
+        target_link_libraries(${target} PRIVATE OpenMP::OpenMP_CXX)
+    endif ()
+endfunction()
+
 # Warning flags shared by every target we compile (glm is header-only).
 if (MSVC)
     add_compile_options(/W3 /Zc:wchar_t)
@@ -42,6 +51,7 @@ set(ENGINE_SOURCES
         src/Drawing.cpp
         src/Renderer.cpp
         src/Noise.cpp
+        src/BVH.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
@@ -57,6 +67,7 @@ if (BUILD_APP)
     add_executable(RedNoise src/RedNoise.cpp framework/DrawingWindow.cpp ${ENGINE_SOURCES})
     target_include_directories(RedNoise PRIVATE framework third_party src)
     target_link_libraries(RedNoise PRIVATE SDL3::SDL3)
+    link_openmp(RedNoise)
     if (NOT MSVC)
         target_compile_options(RedNoise PRIVATE
                 "$<$<CONFIG:Release>:-O3;-march=native;-mtune=native>"
@@ -69,6 +80,7 @@ endif ()
 if (BUILD_HEADLESS)
     add_executable(render_headless tools/render_headless.cpp ${ENGINE_SOURCES})
     target_include_directories(render_headless PRIVATE framework third_party src)
+    link_openmp(render_headless)
 endif ()
 
 # --- Unit tests (no SDL3) ---------------------------------------------------
@@ -76,5 +88,6 @@ if (BUILD_TESTS)
     enable_testing()
     add_executable(rednoise_tests tests/tests.cpp ${ENGINE_SOURCES})
     target_include_directories(rednoise_tests PRIVATE framework third_party src)
+    link_openmp(rednoise_tests)
     add_test(NAME unit COMMAND rednoise_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif ()

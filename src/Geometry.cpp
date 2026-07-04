@@ -1,9 +1,27 @@
 #include "Geometry.h"
 
+#include <cmath>
+
 glm::vec3 triangleNormal(const ModelTriangle &triangle) {
 	glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
 	glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
 	return glm::normalize(glm::cross(e0, e1));
+}
+
+bool intersectTriangle(const glm::vec3 &origin, const glm::vec3 &direction, const ModelTriangle &triangle, float &t,
+                       float &u, float &v) {
+	glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+	glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+	glm::vec3 spVector = origin - triangle.vertices[0];
+	glm::mat3 deMatrix(-direction, e0, e1);
+	float det = glm::determinant(deMatrix);
+	if (std::abs(det) < 1e-8f)
+		return false; // ray parallel to the triangle plane
+	glm::vec3 possibleSolution = glm::inverse(deMatrix) * spVector;
+	t = possibleSolution.x;
+	u = possibleSolution.y;
+	v = possibleSolution.z;
+	return (u >= 0.0f) && (v >= 0.0f) && (u + v <= 1.0f) && (t > 1e-5f);
 }
 
 RayTriangleIntersection getClosestIntersection(const glm::vec3 &origin, const glm::vec3 &direction,
@@ -12,24 +30,12 @@ RayTriangleIntersection getClosestIntersection(const glm::vec3 &origin, const gl
 	for (size_t i = 0; i < triangles.size(); i++) {
 		if (static_cast<int>(i) == ignoreIndex)
 			continue;
-		const ModelTriangle &triangle = triangles[i];
-		glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
-		glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
-		glm::vec3 spVector = origin - triangle.vertices[0];
-		glm::mat3 deMatrix(-direction, e0, e1);
-		float det = glm::determinant(deMatrix);
-		if (std::abs(det) < 1e-8f)
-			continue; // ray parallel to the triangle plane
-		glm::vec3 possibleSolution = glm::inverse(deMatrix) * spVector;
-		float t = possibleSolution.x; // distance along the ray
-		float u = possibleSolution.y; // barycentric
-		float v = possibleSolution.z; // barycentric
-		bool inside = (u >= 0.0f) && (v >= 0.0f) && (u + v <= 1.0f);
-		if (inside && t > 1e-5f && t < closest.distanceFromCamera) {
+		float t, u, v;
+		if (intersectTriangle(origin, direction, triangles[i], t, u, v) && t < closest.distanceFromCamera) {
 			closest.hit = true;
 			closest.distanceFromCamera = t;
 			closest.intersectionPoint = origin + t * direction;
-			closest.intersectedTriangle = triangle;
+			closest.intersectedTriangle = triangles[i];
 			closest.triangleIndex = i;
 			closest.u = u;
 			closest.v = v;

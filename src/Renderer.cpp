@@ -1,5 +1,6 @@
 #include "Renderer.h"
 
+#include "BVH.h"
 #include "Drawing.h"
 #include "Geometry.h"
 #include "Noise.h"
@@ -169,7 +170,7 @@ static glm::vec2 parallaxUV(const ModelTriangle &tri, glm::vec2 uv, const glm::v
 }
 
 static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec3 &rayDirection, const glm::vec3 &light,
-                              const std::vector<ModelTriangle> &model, ShadingModel shading) {
+                              const BVH &bvh, ShadingModel shading) {
 	const ModelTriangle &tri = hit.intersectedTriangle;
 	glm::vec3 point = hit.intersectionPoint;
 	glm::vec3 viewDir = -rayDirection;
@@ -178,9 +179,7 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 	glm::vec3 toLight = light - point;
 	float lightDistance = glm::length(toLight);
 	glm::vec3 lightDir = toLight / lightDistance;
-	RayTriangleIntersection shadow =
-	    getClosestIntersection(point, lightDir, model, static_cast<int>(hit.triangleIndex));
-	bool inShadow = shadow.hit && shadow.distanceFromCamera < lightDistance;
+	bool inShadow = bvh.occluded(point, lightDir, lightDistance, static_cast<int>(hit.triangleIndex));
 
 	// Barycentric weights (vertex 0 gets 1-u-v).
 	float w0 = 1.0f - hit.u - hit.v;
@@ -228,9 +227,9 @@ static glm::vec3 shadeDiffuse(const RayTriangleIntersection &hit, const glm::vec
 
 // Recursively trace a ray. Diffuse surfaces are shaded directly; mirrors reflect
 // and glass reflects + refracts (Fresnel-weighted), bounded by `depth`.
-static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const std::vector<ModelTriangle> &model,
-                          const glm::vec3 &light, ShadingModel shading, int depth) {
-	RayTriangleIntersection hit = getClosestIntersection(origin, direction, model);
+static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, const BVH &bvh, const glm::vec3 &light,
+                          ShadingModel shading, int depth) {
+	RayTriangleIntersection hit = bvh.intersect(origin, direction);
 	if (!hit.hit)
 		return environment(direction); // sky
 	const ModelTriangle &tri = hit.intersectedTriangle;
@@ -239,7 +238,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 	if (depth > 0 && tri.material == Material::Mirror) {
 		glm::vec3 n = faceViewer(tri.normal, direction);
 		glm::vec3 reflected = glm::reflect(direction, n);
-		return traceRay(point + 1e-4f * reflected, reflected, model, light, shading, depth - 1);
+		return traceRay(point + 1e-4f * reflected, reflected, bvh, light, shading, depth - 1);
 	}
 
 	if (depth > 0 && tri.material == Material::Glass) {
@@ -255,7 +254,7 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		}
 		float eta = etai / etat;
 		glm::vec3 reflected = glm::reflect(direction, n);
-		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, model, light, shading, depth - 1);
+		glm::vec3 reflectionColour = traceRay(point + 1e-4f * reflected, reflected, bvh, light, shading, depth - 1);
 		glm::vec3 refracted = glm::refract(direction, n, eta);
 		if (glm::length(refracted) < 1e-6f)
 			return reflectionColour; // total internal reflection
@@ -263,11 +262,11 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 		float r0 = (etai - etat) / (etai + etat);
 		r0 *= r0;
 		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
-		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, model, light, shading, depth - 1);
+		glm::vec3 refractionColour = traceRay(point + 1e-4f * refracted, refracted, bvh, light, shading, depth - 1);
 		return fresnel * reflectionColour + (1.0f - fresnel) * refractionColour;
 	}
 
-	return shadeDiffuse(hit, direction, light, model, shading);
+	return shadeDiffuse(hit, direction, light, bvh, shading);
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
@@ -277,14 +276,17 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 	int H = static_cast<int>(canvas.height);
 	float f = camera.focalLength * camera.scale;
 	const int maxDepth = 4;
+	BVH bvh(model); // build the acceleration structure once per frame
 
+	// Each pixel is independent, so the scanline loop parallelises cleanly.
+#pragma omp parallel for schedule(dynamic, 4)
 	for (int y = 0; y < H; y++) {
 		for (int x = 0; x < W; x++) {
 			// Ray through this pixel: invert the projection to get a camera-space
 			// direction, then rotate into world space.
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-			glm::vec3 colour = traceRay(camera.position, direction, model, light, shading, maxDepth);
+			glm::vec3 colour = traceRay(camera.position, direction, bvh, light, shading, maxDepth);
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));
