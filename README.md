@@ -94,6 +94,10 @@ Cornell box is parsed (with materials) at startup. Projecting and rasterising th
 3D geometry (perspective projection, a depth buffer, a movable camera, and on
 toward a ray tracer with shadows and lighting) is the intended next step.
 
+See [ROADMAP.md](ROADMAP.md) for the full phased build plan, from a first
+wireframe render up through Phong shading, reflection/refraction, soft shadows,
+acceleration structures, and global illumination.
+
 ## Credits
 
 The `framework/` "sdw" classes originate from the University of Bristol Computer
