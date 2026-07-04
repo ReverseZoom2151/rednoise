@@ -270,6 +270,119 @@ void renderShadowMapped(const std::vector<ModelTriangle> &model, const Camera &c
 	}
 }
 
+// Rasterise the scene, then shadow it with stencil shadow volumes (z-fail /
+// Carmack's reverse): each occluder triangle is extruded away from the light
+// into a closed volume; the volume's faces are rasterised into a stencil buffer,
+// counting +1 for back faces and -1 for front faces that lie behind the scene
+// depth. Pixels with a non-zero stencil are inside a shadow volume.
+void renderStencilShadowVolumes(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                                const glm::vec3 &lightPos) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	std::vector<float> depthBuffer(static_cast<size_t>(W) * H, 0.0f); // inverse depth, 0 = far
+	std::vector<glm::vec3> colourBuffer(static_cast<size_t>(W) * H, glm::vec3(0.0f));
+	std::vector<int> stencil(static_cast<size_t>(W) * H, 0);
+
+	// Pass 1: rasterise the lit scene into colour + depth.
+	for (const ModelTriangle &tri : model) {
+		CanvasPoint p[3];
+		bool ok = true;
+		for (int i = 0; i < 3; i++) {
+			p[i] = camera.projectVertex(tri.vertices[i]);
+			if (p[i].depth <= 0.0f)
+				ok = false;
+		}
+		if (!ok)
+			continue;
+		float area = edgeFunction(p[0], p[1], p[2].x, p[2].y);
+		if (std::abs(area) < 1e-6f)
+			continue;
+		int minX = std::max(0, static_cast<int>(std::floor(std::min({p[0].x, p[1].x, p[2].x}))));
+		int maxX = std::min(W - 1, static_cast<int>(std::ceil(std::max({p[0].x, p[1].x, p[2].x}))));
+		int minY = std::max(0, static_cast<int>(std::floor(std::min({p[0].y, p[1].y, p[2].y}))));
+		int maxY = std::min(H - 1, static_cast<int>(std::ceil(std::max({p[0].y, p[1].y, p[2].y}))));
+		float inv0 = 1.0f / p[0].depth, inv1 = 1.0f / p[1].depth, inv2 = 1.0f / p[2].depth;
+		glm::vec3 n = tri.normal;
+		glm::vec3 albedo = glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue) / 255.0f;
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				float w0 = edgeFunction(p[1], p[2], x + 0.5f, y + 0.5f) / area;
+				float w1 = edgeFunction(p[2], p[0], x + 0.5f, y + 0.5f) / area;
+				float w2 = edgeFunction(p[0], p[1], x + 0.5f, y + 0.5f) / area;
+				if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+					continue;
+				float invDepth = w0 * inv0 + w1 * inv1 + w2 * inv2;
+				size_t idx = static_cast<size_t>(y) * W + x;
+				if (invDepth <= depthBuffer[idx])
+					continue;
+				depthBuffer[idx] = invDepth;
+				glm::vec3 wp =
+				    (w0 * tri.vertices[0] * inv0 + w1 * tri.vertices[1] * inv1 + w2 * tri.vertices[2] * inv2) /
+				    invDepth;
+				glm::vec3 L = glm::normalize(lightPos - wp);
+				float diff = std::max(0.0f, glm::dot(n, L));
+				colourBuffer[idx] = albedo * (0.25f + 0.75f * diff) * 255.0f;
+			}
+		}
+	}
+
+	// Pass 2: rasterise each occluder's shadow-volume faces into the stencil.
+	auto stencilPass = [&](const glm::vec3 &a, const glm::vec3 &b, const glm::vec3 &c) {
+		CanvasPoint p[3] = {camera.projectVertex(a), camera.projectVertex(b), camera.projectVertex(c)};
+		if (p[0].depth <= 0.0f || p[1].depth <= 0.0f || p[2].depth <= 0.0f)
+			return;
+		float area = edgeFunction(p[0], p[1], p[2].x, p[2].y);
+		if (std::abs(area) < 1e-6f)
+			return;
+		int dir = area > 0.0f ? +1 : -1; // screen winding = front/back face
+		int minX = std::max(0, static_cast<int>(std::floor(std::min({p[0].x, p[1].x, p[2].x}))));
+		int maxX = std::min(W - 1, static_cast<int>(std::ceil(std::max({p[0].x, p[1].x, p[2].x}))));
+		int minY = std::max(0, static_cast<int>(std::floor(std::min({p[0].y, p[1].y, p[2].y}))));
+		int maxY = std::min(H - 1, static_cast<int>(std::ceil(std::max({p[0].y, p[1].y, p[2].y}))));
+		float inv0 = 1.0f / p[0].depth, inv1 = 1.0f / p[1].depth, inv2 = 1.0f / p[2].depth;
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				float w0 = edgeFunction(p[1], p[2], x + 0.5f, y + 0.5f) / area;
+				float w1 = edgeFunction(p[2], p[0], x + 0.5f, y + 0.5f) / area;
+				float w2 = edgeFunction(p[0], p[1], x + 0.5f, y + 0.5f) / area;
+				if ((w0 < 0.0f || w1 < 0.0f || w2 < 0.0f) && (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f))
+					continue; // outside the triangle (either winding)
+				float invDepth = w0 * inv0 + w1 * inv1 + w2 * inv2;
+				size_t idx = static_cast<size_t>(y) * W + x;
+				if (invDepth < depthBuffer[idx]) // z-fail: this face is behind the scene
+					stencil[idx] += dir;
+			}
+		}
+	};
+	const float farDist = 40.0f;
+	for (const ModelTriangle &tri : model) {
+		glm::vec3 v0 = tri.vertices[0], v1 = tri.vertices[1], v2 = tri.vertices[2];
+		glm::vec3 f0 = v0 + glm::normalize(v0 - lightPos) * farDist;
+		glm::vec3 f1 = v1 + glm::normalize(v1 - lightPos) * farDist;
+		glm::vec3 f2 = v2 + glm::normalize(v2 - lightPos) * farDist;
+		stencilPass(v0, v1, v2); // near cap
+		stencilPass(f0, f2, f1); // far cap (reversed)
+		stencilPass(v0, v1, f1); // side quads
+		stencilPass(v0, f1, f0); //
+		stencilPass(v1, v2, f2); //
+		stencilPass(v1, f2, f1); //
+		stencilPass(v2, v0, f0); //
+		stencilPass(v2, f0, f2); //
+	}
+
+	// Composite: darken pixels inside a shadow volume (stencil != 0).
+	for (int i = 0; i < W * H; i++) {
+		glm::vec3 c = colourBuffer[static_cast<size_t>(i)];
+		if (stencil[static_cast<size_t>(i)] != 0)
+			c *= 0.3f;
+		int r = std::min(255, static_cast<int>(c.r));
+		int g = std::min(255, static_cast<int>(c.g));
+		int b = std::min(255, static_cast<int>(c.b));
+		canvas.pixels[static_cast<size_t>(i)] = (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+	}
+}
+
 // Fraction of a light visible from `point` (1 = lit, 0 = shadowed). Point and
 // directional lights are binary; an area light (radius > 0) is sampled over a
 // fixed disk for soft shadows (deterministic pattern, so no noise).
