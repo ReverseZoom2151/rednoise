@@ -1,0 +1,22 @@
+# Build output
+build/
+cmake-build-*/
+*.o
+*.exe
+compile_commands.json
+# NOTE: do not ignore *.obj — Wavefront model files under assets/ use that extension.
+
+# Rendered frames (regenerable via the app)
+output.ppm
+output.bmp
+output/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakePresets.json.user
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
