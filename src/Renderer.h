@@ -30,7 +30,8 @@ void renderShadowMapped(const std::vector<ModelTriangle> &model, const Camera &c
 // single default soft area light.
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
                      ShadingModel shading = ShadingModel::Phong, const std::vector<Light> &lights = {},
-                     const Primitives &prims = {});
+                     const Primitives &prims = {}, float fogDensity = 0.0f,
+                     const glm::vec3 &fogColour = glm::vec3(200.0f, 210.0f, 230.0f));
 
 // Monte-Carlo path tracer: `samples` jittered paths per pixel give global
 // illumination (colour bleeding), soft shadows, and anti-aliasing together.

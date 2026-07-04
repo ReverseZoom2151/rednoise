@@ -63,6 +63,8 @@ static Material materialFor(const std::string &name) {
 		return Material::Metal;
 	if (name == "Dispersive" || name == "Prism")
 		return Material::Dispersive;
+	if (name == "Subsurface" || name == "SSS" || name == "Wax" || name == "Jade")
+		return Material::Subsurface;
 	return Material::Diffuse;
 }
 

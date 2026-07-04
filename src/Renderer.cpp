@@ -642,6 +642,33 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 		return albedo * pathTrace(point + 1e-4f * dir, dir, scene, lights, depth - 1, rng);
 	}
 
+	if (tri.material == Material::Subsurface) {
+		// A cheap BSSRDF approximation: wrap-around diffuse (light bleeds past the
+		// terminator for a soft, waxy look) plus translucency - light entering the
+		// far side and diffusing out through thin regions, attenuated by the
+		// distance through the object (its "thickness" toward the light).
+		glm::vec3 n = faceViewer(tri.normal, direction);
+		glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
+		glm::vec3 shade(0.0f);
+		const float wrap = 0.5f;
+		for (const Light &L : lights) {
+			glm::vec3 to = L.position - point;
+			float dist = glm::length(to);
+			glm::vec3 lightDir = to / dist;
+			float atten = L.intensity / (L.attenConstant + L.attenLinear * dist + L.attenQuadratic * dist * dist);
+			float wrapDiff = std::max(0.0f, (glm::dot(n, lightDir) + wrap) / (1.0f + wrap));
+			shade += albedo * L.colour * (visibility(L, point, scene, ignore) * atten * wrapDiff);
+			RayTriangleIntersection exit = scene.intersect(point - n * 1e-3f, lightDir, ignore);
+			float thickness = exit.hit ? exit.distanceFromCamera : 0.0f;
+			shade += albedo * L.colour * (atten * std::exp(-3.0f * thickness) * 0.6f);
+		}
+		glm::vec3 direct = glm::min(shade, glm::vec3(1.5f));
+		if (depth <= 0)
+			return direct;
+		glm::vec3 sb = cosineHemisphere(n, rng);
+		return direct + albedo * pathTrace(point + 1e-4f * sb, sb, scene, lights, depth - 1, rng);
+	}
+
 	glm::vec3 n = faceViewer(tri.normal, direction);
 	glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
 	glm::vec3 direct = directLight(point, n, albedo, lights, scene, ignore);
@@ -653,7 +680,8 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 }
 
 void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
-                     ShadingModel shading, const std::vector<Light> &lights, const Primitives &prims) {
+                     ShadingModel shading, const std::vector<Light> &lights, const Primitives &prims, float fogDensity,
+                     const glm::vec3 &fogColour) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -678,6 +706,12 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
 			glm::vec3 colour = traceRay(camera.position, direction, scene, used, shading, maxDepth);
+			// Depth fog: blend toward the fog colour by 1 - exp(-density * distance).
+			if (fogDensity > 0.0f) {
+				RayTriangleIntersection h = scene.intersect(camera.position, direction);
+				float dist = h.hit ? h.distanceFromCamera : 30.0f;
+				colour = glm::mix(colour, fogColour, 1.0f - std::exp(-fogDensity * dist));
+			}
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));
