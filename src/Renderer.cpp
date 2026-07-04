@@ -283,6 +283,33 @@ static float visibility(const Light &L, const glm::vec3 &point, const Scene &sce
 		float dist = glm::length(to);
 		return scene.occluded(point, to / dist, dist, ignoreIndex) ? 0.0f : 1.0f;
 	}
+	if (L.type == LightType::Volume) {
+		// A 3D emitter: sample points throughout the light's sphere volume
+		// (fixed pattern in the unit ball) for a wide volumetric penumbra.
+		static const glm::vec3 kBall[14] = {{0, 0, 0},
+		                                    {0.9f, 0, 0},
+		                                    {-0.9f, 0, 0},
+		                                    {0, 0.9f, 0},
+		                                    {0, -0.9f, 0},
+		                                    {0, 0, 0.9f},
+		                                    {0, 0, -0.9f},
+		                                    {0.5f, 0.5f, 0.5f},
+		                                    {-0.5f, 0.5f, 0.5f},
+		                                    {0.5f, -0.5f, 0.5f},
+		                                    {-0.5f, -0.5f, 0.5f},
+		                                    {0.5f, 0.5f, -0.5f},
+		                                    {-0.5f, 0.5f, -0.5f},
+		                                    {0.5f, -0.5f, -0.5f}};
+		int unoccluded = 0;
+		for (const glm::vec3 &s : kBall) {
+			glm::vec3 samplePos = L.position + s * L.radius;
+			glm::vec3 to = samplePos - point;
+			float dist = glm::length(to);
+			if (!scene.occluded(point, to / dist, dist, ignoreIndex))
+				unoccluded++;
+		}
+		return unoccluded / 14.0f;
+	}
 	static const glm::vec2 kSamples[9] = {{0, 0},       {1, 0},        {-1, 0},       {0, 1},        {0, -1},
 	                                      {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
 	glm::vec3 axis = glm::normalize(point - L.position);
@@ -753,9 +780,13 @@ static void tracePhoton(const Scene &scene, const glm::vec3 &origin, const glm::
 }
 
 // Shade a camera ray using a prebuilt photon map: direct lighting plus the
-// gathered photon irradiance (which carries indirect light and caustics).
+// gathered photon irradiance (which carries indirect light and caustics). When
+// gatherRays > 0 the indirect term uses a final gather (average the photon
+// density one bounce away) instead of sampling the map at the visible point,
+// which removes low-frequency photon-map blotches.
 static glm::vec3 photonShade(const glm::vec3 &origin, const glm::vec3 &direction, const Scene &scene,
-                             const std::vector<Light> &lights, const PhotonMap &map, float radius, int depth) {
+                             const std::vector<Light> &lights, const PhotonMap &map, float radius, int depth,
+                             int gatherRays, std::mt19937 &rng) {
 	RayTriangleIntersection hit = scene.intersect(origin, direction);
 	if (!hit.hit)
 		return environment(direction) / 255.0f;
@@ -765,12 +796,12 @@ static glm::vec3 photonShade(const glm::vec3 &origin, const glm::vec3 &direction
 
 	if (depth > 0 && tri.material == Material::Mirror) {
 		glm::vec3 r = glm::reflect(direction, n);
-		return photonShade(point + 1e-4f * r, r, scene, lights, map, radius, depth - 1);
+		return photonShade(point + 1e-4f * r, r, scene, lights, map, radius, depth - 1, gatherRays, rng);
 	}
 	if (depth > 0 && tri.material == Material::Metal) {
 		glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
 		glm::vec3 r = glm::reflect(direction, n);
-		return albedo * photonShade(point + 1e-4f * r, r, scene, lights, map, radius, depth - 1);
+		return albedo * photonShade(point + 1e-4f * r, r, scene, lights, map, radius, depth - 1, gatherRays, rng);
 	}
 	if (depth > 0 && tri.material == Material::Glass) {
 		const float ior = 1.5f;
@@ -787,22 +818,40 @@ static glm::vec3 photonShade(const glm::vec3 &origin, const glm::vec3 &direction
 		r0 *= r0;
 		float fresnel = r0 + (1.0f - r0) * std::pow(1.0f - cosi, 5.0f);
 		glm::vec3 reflected = glm::reflect(direction, nn);
-		glm::vec3 reflCol = photonShade(point + 1e-4f * reflected, reflected, scene, lights, map, radius, depth - 1);
+		glm::vec3 reflCol =
+		    photonShade(point + 1e-4f * reflected, reflected, scene, lights, map, radius, depth - 1, gatherRays, rng);
 		glm::vec3 refr = glm::refract(direction, nn, etai / etat);
 		if (glm::length(refr) < 1e-6f)
 			return reflCol;
-		glm::vec3 refrCol = photonShade(point + 1e-4f * refr, refr, scene, lights, map, radius, depth - 1);
+		glm::vec3 refrCol =
+		    photonShade(point + 1e-4f * refr, refr, scene, lights, map, radius, depth - 1, gatherRays, rng);
 		return fresnel * reflCol + (1.0f - fresnel) * refrCol;
 	}
 
 	glm::vec3 albedo = surfaceBaseColour(hit, -direction) / 255.0f;
 	glm::vec3 direct = directLight(point, n, albedo, lights, scene, static_cast<int>(hit.triangleIndex));
-	glm::vec3 indirect = albedo * map.gather(point, n, radius); // indirect light + caustics
+	glm::vec3 indirect;
+	if (gatherRays > 0) {
+		// Final gather: bounce a batch of cosine-weighted rays and gather the
+		// photon density where they land (or the sky), then average.
+		glm::vec3 gathered(0.0f);
+		for (int i = 0; i < gatherRays; i++) {
+			glm::vec3 gdir = cosineHemisphere(n, rng);
+			RayTriangleIntersection gh = scene.intersect(point + 1e-4f * gdir, gdir);
+			if (gh.hit)
+				gathered += map.gather(gh.intersectionPoint, faceViewer(gh.intersectedTriangle.normal, gdir), radius);
+			else
+				gathered += environment(gdir) / 255.0f;
+		}
+		indirect = albedo * gathered / static_cast<float>(gatherRays);
+	} else {
+		indirect = albedo * map.gather(point, n, radius);
+	}
 	return direct + indirect;
 }
 
 void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int numPhotons,
-                        const std::vector<Light> &lights, const Primitives &prims) {
+                        const std::vector<Light> &lights, const Primitives &prims, int gatherRays) {
 	canvas.clearPixels();
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
@@ -835,13 +884,15 @@ void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &c
 	map.photons = std::move(photons);
 	map.build(radius);
 
-	// Pass 2: gather at each camera ray's diffuse hit.
+	// Pass 2: gather at each camera ray's diffuse hit (optionally final-gather).
 #pragma omp parallel for schedule(dynamic, 4)
 	for (int y = 0; y < H; y++) {
+		std::mt19937 rng(1000 + y);
 		for (int x = 0; x < W; x++) {
 			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
 			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
-			glm::vec3 colour = photonShade(camera.position, direction, scene, used, map, radius, 4) * 255.0f;
+			glm::vec3 colour =
+			    photonShade(camera.position, direction, scene, used, map, radius, 4, gatherRays, rng) * 255.0f;
 			int r = std::min(255, static_cast<int>(colour.r));
 			int g = std::min(255, static_cast<int>(colour.g));
 			int b = std::min(255, static_cast<int>(colour.b));

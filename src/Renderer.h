@@ -43,8 +43,10 @@ void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &cam
 // Photon mapping: emit `numPhotons` from the light (reflecting/refracting through
 // mirrors and glass, which focuses caustics), then gather them for indirect
 // light + caustics on top of direct lighting.
+// gatherRays > 0 enables a final gather (smoother indirect, more cost).
 void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
-                        int numPhotons = 200000, const std::vector<Light> &lights = {}, const Primitives &prims = {});
+                        int numPhotons = 200000, const std::vector<Light> &lights = {}, const Primitives &prims = {},
+                        int gatherRays = 0);
 
 // Post-filters over a rendered canvas.
 void toneMap(Canvas &canvas, float exposure = 1.0f, float gamma = 2.2f);
