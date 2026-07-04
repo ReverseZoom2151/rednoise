@@ -1,62 +1,53 @@
 PROJECT_NAME := RedNoise
+BUILD_DIR    := build
+EXECUTABLE   := $(BUILD_DIR)/$(PROJECT_NAME)
 
-BUILD_DIR := build
-
-# Define the names of key files
-SOURCE_FILES := $(wildcard src/*.cpp) $(wildcard libs/sdw/*.cpp)
-HEADER_FILES := $(wildcard src/*.h) $(wildcard libs/sdw/*.h)
-# HEADER_FILES := $(wildcard src/*.h) $(wildcard src/Utils.h) $(wildcard libs/sdw/*.h)
-OBJECT_FILES := $(patsubst src/%.cpp, $(BUILD_DIR)/%.o, $(SOURCE_FILES))
-EXECUTABLE := $(BUILD_DIR)/$(PROJECT_NAME)
+# All translation units: the app, the glm instantiation unit, and the framework.
+SOURCE_FILES := src/RedNoise.cpp third_party/glm/glm.cpp $(wildcard framework/*.cpp)
 
 # Build settings
-COMPILER := clang++
-COMPILER_OPTIONS := -c -pipe -Wall -std=c++11 # If you have an older compiler, you might have to use -std=c++0x
-# COMPILER_OPTIONS := -c -pipe -Wall -std=c++11 -Ilibs
-DEBUG_OPTIONS := -ggdb -g3
-LINKER_OPTIONS := -lSDL2
+COMPILER         := clang++
+COMPILER_OPTIONS := -pipe -std=c++17
+INCLUDES         := -Iframework -Ithird_party
+WARNINGS         := -Wall
+DEBUG_OPTIONS    := -ggdb -g3
+FUSSY_OPTIONS    := -Werror -pedantic
+SANITIZER_OPTS   := -O1 -fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
+SPEEDY_OPTIONS   := -Ofast -funsafe-math-optimizations -march=native
 
-# Set up flags
-SDL_COMPILER_FLAGS := $(shell sdl2-config --cflags)
-GLM_INCLUDE_DIR := src
+# SDL2 flags (falls back gracefully if sdl2-config is on PATH)
+SDL_CFLAGS := $(shell sdl2-config --cflags)
+SDL_LIBS   := $(shell sdl2-config --libs)
+
+CXXFLAGS := $(COMPILER_OPTIONS) $(WARNINGS) $(INCLUDES) $(SDL_CFLAGS)
 
 default: debug
 
-# Rule to compile and link for use with a debugger (although works fine even if you aren't using a debugger!)
-debug: $(OBJECT_FILES)
-	$(COMPILER) $(LINKER_OPTIONS) $(DEBUG_OPTIONS) -o $(EXECUTABLE) $(OBJECT_FILES) $(SDL_COMPILER_FLAGS)
-	./$(EXECUTABLE)
-
-# Rule to help find runtime errors (when you get a segmentation fault)
-diagnostic: $(OBJECT_FILES)
-	$(COMPILER) $(LINKER_OPTIONS) $(FUSSY_OPTIONS) $(SANITIZER_OPTIONS) -o $(EXECUTABLE) $(OBJECT_FILES) $(SDL_COMPILER_FLAGS)
-	./$(EXECUTABLE)
-
-# Rule to build for high-performance executable (for manually testing interaction)
-speedy: $(OBJECT_FILES)
-	$(COMPILER) $(LINKER_OPTIONS) $(SPEEDY_OPTIONS) -o $(EXECUTABLE) $(OBJECT_FILES) $(SDL_COMPILER_FLAGS)
-	./$(EXECUTABLE)
-
-# Rule to compile and link for final production release
-production: $(OBJECT_FILES)
-	$(COMPILER) $(LINKER_OPTIONS) -o $(EXECUTABLE) $(OBJECT_FILES) $(SDL_COMPILER_FLAGS)
-	./$(EXECUTABLE)
-
-# Rule for building object files from source files
-$(BUILD_DIR)/%.o: src/%.cpp $(HEADER_FILES)
+# For use with a debugger (works fine without one too).
+debug:
 	@mkdir -p $(BUILD_DIR)
-	$(COMPILER) $(COMPILER_OPTIONS) -Ilibs/sdw -I$(GLM_INCLUDE_DIR) -o $@ $< $(SDL_COMPILER_FLAGS)
+	$(COMPILER) $(CXXFLAGS) $(DEBUG_OPTIONS) -o $(EXECUTABLE) $(SOURCE_FILES) $(SDL_LIBS)
+	./$(EXECUTABLE)
 
-$(BUILD_DIR)/%.o: libs/sdw/%.cpp $(HEADER_FILES)
+# Helps track down segfaults / UB.
+diagnostic:
 	@mkdir -p $(BUILD_DIR)
-	$(COMPILER) $(COMPILER_OPTIONS) -Ilibs/sdw -I$(GLM_INCLUDE_DIR) -o $@ $< $(SDL_COMPILER_FLAGS)
+	$(COMPILER) $(CXXFLAGS) $(FUSSY_OPTIONS) $(SANITIZER_OPTS) -o $(EXECUTABLE) $(SOURCE_FILES) $(SDL_LIBS)
+	./$(EXECUTABLE)
 
-# Rule to clean build artifacts
+# High-performance build for interactive testing.
+speedy:
+	@mkdir -p $(BUILD_DIR)
+	$(COMPILER) $(CXXFLAGS) $(SPEEDY_OPTIONS) -o $(EXECUTABLE) $(SOURCE_FILES) $(SDL_LIBS)
+	./$(EXECUTABLE)
+
+# Final production release.
+production:
+	@mkdir -p $(BUILD_DIR)
+	$(COMPILER) $(CXXFLAGS) -O2 -o $(EXECUTABLE) $(SOURCE_FILES) $(SDL_LIBS)
+	./$(EXECUTABLE)
+
 clean:
 	rm -rf $(BUILD_DIR)
 
-
-
-
-
-
+.PHONY: default debug diagnostic speedy production clean
