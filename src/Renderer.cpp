@@ -665,6 +665,9 @@ static glm::vec3 traceRay(const glm::vec3 &origin, const glm::vec3 &direction, c
 	const ModelTriangle &tri = hit.intersectedTriangle;
 	glm::vec3 point = hit.intersectionPoint;
 
+	if (tri.material == Material::Emissive)
+		return glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue) * 1.3f;
+
 	if (depth > 0 && tri.material == Material::Mirror) {
 		glm::vec3 n = faceViewer(tri.normal, direction);
 		glm::vec3 reflected = glm::reflect(direction, n);
@@ -749,6 +752,11 @@ static glm::vec3 pathTrace(const glm::vec3 &origin, const glm::vec3 &direction, 
 	glm::vec3 point = hit.intersectionPoint;
 	int ignore = static_cast<int>(hit.triangleIndex);
 
+	if (tri.material == Material::Emissive) {
+		// Glowing geometry: emit its colour. A bounce ray landing here picks up
+		// the emission, so the surface lights the scene as an area light.
+		return glm::vec3(tri.colour.red, tri.colour.green, tri.colour.blue) / 255.0f * 4.0f;
+	}
 	if (tri.material == Material::Mirror && depth > 0) {
 		glm::vec3 n = faceViewer(tri.normal, direction);
 		glm::vec3 reflected = glm::reflect(direction, n);

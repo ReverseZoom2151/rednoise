@@ -67,6 +67,8 @@ static Material materialFor(const std::string &name) {
 		return Material::Subsurface;
 	if (name == "NormalMap" || name == "Normal")
 		return Material::NormalMap;
+	if (name == "Emissive" || name == "Emit" || name == "Glow")
+		return Material::Emissive;
 	return Material::Diffuse;
 }
 
