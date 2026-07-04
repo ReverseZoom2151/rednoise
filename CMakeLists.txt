@@ -14,7 +14,7 @@
 #   ./build/render_headless     # writes render-*.ppm
 
 cmake_minimum_required(VERSION 3.24) # FetchContent FIND_PACKAGE_ARGS (find-first-then-fetch)
-project(RedNoise CXX)
+project(RedNoise VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +24,7 @@ option(BUILD_APP "Build the RedNoise application (requires SDL3)" ON)
 option(BUILD_TESTS "Build the unit tests" ON)
 option(BUILD_HEADLESS "Build the headless PPM renderer (no SDL3)" ON)
 option(BUILD_GPU "Build the OpenCL GPU path tracer (requires an OpenCL SDK)" OFF)
+option(BUILD_LIB "Build the installable rednoise library + C API" ON)
 
 # Optional: multithread the ray tracer. Correctness does not depend on it, so a
 # missing OpenMP just falls back to single-threaded.
@@ -39,7 +40,8 @@ if (MSVC)
     add_compile_options(/W3 /Zc:wchar_t)
 else ()
     add_compile_options(-Wall -Wextra -Wcast-align -Werror=return-type
-            -Wno-unused-parameter -Wno-unused-variable -Wno-ignored-attributes)
+            -Wno-unused-parameter -Wno-unused-variable -Wno-ignored-attributes
+            -Wno-unknown-pragmas) # the library builds without OpenMP; #pragma omp is a no-op there
 endif ()
 
 # --- Dependencies: find-first, then fetch -----------------------------------
@@ -72,6 +74,17 @@ else ()
     target_include_directories(glm_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
     message(STATUS "glm: using vendored third_party/glm (FETCH_DEPENDENCIES=OFF)")
 endif ()
+
+# glm's include path as a plain build-time include (a genex resolved per config).
+# The installable library uses this instead of linking glm_headers, so glm - a
+# build-only header dependency - never leaks into the library's export set.
+if (TARGET glm::glm)
+    set(RN_GLM_INCLUDE "$<TARGET_PROPERTY:glm::glm,INTERFACE_INCLUDE_DIRECTORIES>")
+elseif (TARGET glm)
+    set(RN_GLM_INCLUDE "$<TARGET_PROPERTY:glm,INTERFACE_INCLUDE_DIRECTORIES>")
+else ()
+    set(RN_GLM_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+endif ()
 # Each of our targets links glm_headers explicitly below. (Deliberately not
 # link_libraries() at directory scope: that would leak onto fetched dependency
 # targets like the OpenCL ICD loader and break their install/export sets.)
@@ -103,6 +116,48 @@ set(ENGINE_SOURCES
         framework/TextureMap.cpp
         framework/TexturePoint.cpp
         framework/Utils.cpp)
+
+# --- Installable library + C ABI --------------------------------------------
+# A self-contained library exposing the stable C API (include/rednoise/rednoise.h).
+# glm is compiled in (build-only include) and OpenMP is intentionally not linked,
+# so the export set has no external dependencies - downstream links only
+# `rednoise::rednoise` and needs nothing else. Installs a CMake package config so
+# consumers can `find_package(rednoise)`.
+if (BUILD_LIB)
+    add_library(rednoise ${ENGINE_SOURCES} src/capi.cpp)
+    add_library(rednoise::rednoise ALIAS rednoise)
+    target_include_directories(rednoise
+            PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+            PRIVATE framework src "${RN_GLM_INCLUDE}")
+    set_target_properties(rednoise PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+    install(TARGETS rednoise EXPORT rednoiseTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(EXPORT rednoiseTargets NAMESPACE rednoise::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rednoise)
+    configure_package_config_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/rednoiseConfig.cmake.in
+            ${CMAKE_CURRENT_BINARY_DIR}/rednoiseConfig.cmake
+            INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rednoise)
+    write_basic_package_version_file(
+            ${CMAKE_CURRENT_BINARY_DIR}/rednoiseConfigVersion.cmake
+            VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+    install(FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/rednoiseConfig.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/rednoiseConfigVersion.cmake
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rednoise)
+
+    # A pure-C example that links the library - proves the ABI.
+    add_executable(c_consumer examples/c_consumer.c)
+    target_link_libraries(c_consumer PRIVATE rednoise)
+    set_target_properties(c_consumer PROPERTIES LINKER_LANGUAGE CXX)
+endif ()
 
 # --- Application (needs SDL3) ------------------------------------------------
 if (BUILD_APP)

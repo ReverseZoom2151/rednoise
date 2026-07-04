@@ -162,6 +162,38 @@ The code uses the OpenCL 1.2 API subset for the broadest reach but runs on newer
 runtimes (3.0, etc.) at full speed. Require a newer runtime by raising the target
 level: `cmake -B build -DBUILD_GPU=ON -DOPENCL_TARGET_VERSION=300`.
 
+## Using it as a library (C API)
+
+The engine installs as a self-contained library with a stable C ABI
+(`include/rednoise/rednoise.h`) that exposes no C++ or glm types, so it links
+from C and binds cleanly from Rust, Python, and others.
+
+```sh
+cmake -B build -S . -DBUILD_APP=OFF
+cmake --build build
+cmake --install build --prefix /your/prefix
+```
+
+Then from a downstream CMake project (`find_package` gives `rednoise::rednoise`):
+
+```cmake
+find_package(rednoise REQUIRED)
+add_executable(app app.c)
+target_link_libraries(app PRIVATE rednoise::rednoise)
+# the engine is C++, so the consuming project enables CXX for the link step
+```
+
+```c
+#include <rednoise/rednoise.h>
+rn_scene *scene = rn_scene_load_obj("cornell-box.obj", 0.35f);
+unsigned char rgba[320 * 240 * 4];
+rn_render(scene, RN_PATHTRACED, 320, 240, 4.0f, 64, rgba);
+rn_scene_free(scene);
+```
+
+A complete example is in `examples/c_consumer.c`. This C API is also the surface
+future Rust / Python / WASM bindings target.
+
 ## Controls (interactive app)
 
 | Input | Action |
