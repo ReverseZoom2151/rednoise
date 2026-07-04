@@ -56,6 +56,7 @@ set(ENGINE_SOURCES
         src/Scene.cpp
         src/Photon.cpp
         src/Materials.cpp
+        src/Radiosity.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

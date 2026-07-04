@@ -149,7 +149,7 @@ that were not in the original plan.
 | [done] Volumetric 3D light source | COMS30115 gallery | done |
 | [done] Photon-map final gather | COMS30115 gallery | done |
 | [done] Named PBR material presets + camera roll | Raytracer_Bristol / COMS30020 | done |
-| Classic radiosity (form factors) | COMS30115 lecture 14 | pending |
+| [done] Classic radiosity (patches + gathering) | COMS30115 lecture 14 | done |
 | Bidirectional path tracing | COMS30115 lecture 15 | pending |
 | Metropolis light transport (PSSMLT) | COMS30115 lecture 15 | pending |
 
