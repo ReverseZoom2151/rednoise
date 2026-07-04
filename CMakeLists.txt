@@ -125,6 +125,7 @@ set(ENGINE_SOURCES
         src/QMC.cpp
         src/Grid.cpp
         src/Bezier.cpp
+        src/Sky.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp

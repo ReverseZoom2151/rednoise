@@ -22,6 +22,7 @@
 #include "Octree.h"
 #include "OceanFFT.h"
 #include "SceneGraph.h"
+#include "Sky.h"
 #include "Transform.h"
 #include "Voxel.h"
 #include <Canvas.h>
@@ -351,6 +352,12 @@ static void testDeepScanModules() {
 	CHECK(bezierPatchPoint(patch, 0.5f, 0.5f).y > 0.3f); // surface bulges up in the middle
 	std::vector<ModelTriangle> patchTris = tessellateBezierPatch(patch, 8, Colour(180, 120, 90));
 	CHECK(patchTris.size() == static_cast<size_t>(2 * 8 * 8));
+
+	// Sky: overhead is bluer than the sun direction (Rayleigh scattering).
+	glm::vec3 sun = glm::normalize(glm::vec3(0.0f, 0.3f, -1.0f));
+	glm::vec3 up = skyColour(glm::vec3(0, 1, 0), sun), atSun = skyColour(sun, sun);
+	CHECK(up.b > up.r);                     // blue sky overhead
+	CHECK(atSun.r + atSun.g > up.r + up.g); // the sun region is much brighter/warmer
 }
 
 int main() {
