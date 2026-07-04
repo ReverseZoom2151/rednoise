@@ -49,6 +49,26 @@ void renderPhotonMapped(const std::vector<ModelTriangle> &model, const Camera &c
                         int numPhotons = 200000, const std::vector<Light> &lights = {}, const Primitives &prims = {},
                         int gatherRays = 0);
 
+// Participating media: ray-march the scene through a uniform fog of the given
+// density, accumulating single-scattered light so unoccluded beams form visible
+// shafts (god-rays). `steps` is the march resolution.
+void renderVolumetric(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                      const std::vector<Light> &lights = {}, const Primitives &prims = {}, float density = 0.6f,
+                      int steps = 48);
+
+// Accumulation buffer: average many (jittered) render passes into one image, for
+// progressive anti-aliasing / depth of field / motion blur / noise reduction.
+class AccumBuffer {
+public:
+	AccumBuffer(int width, int height);
+	void add(const Canvas &canvas);  // fold in one pass
+	void resolve(Canvas &out) const; // write the running average
+
+private:
+	int w_, h_, count_;
+	std::vector<glm::vec3> sum_;
+};
+
 // Post-filters over a rendered canvas.
 void toneMap(Canvas &canvas, float exposure = 1.0f, float gamma = 2.2f);
 void applyFXAA(Canvas &canvas);

@@ -752,6 +752,54 @@ void renderRaytraced(const std::vector<ModelTriangle> &model, const Camera &came
 	}
 }
 
+void renderVolumetric(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas,
+                      const std::vector<Light> &lights, const Primitives &prims, float density, int steps) {
+	canvas.clearPixels();
+	int W = static_cast<int>(canvas.width);
+	int H = static_cast<int>(canvas.height);
+	float f = camera.focalLength * camera.scale;
+	Scene scene(model, prims);
+	std::vector<Light> used = lights;
+	if (used.empty()) {
+		Light d;
+		d.radius = 0.15f;
+		used.push_back(d);
+	}
+
+#pragma omp parallel for schedule(dynamic, 4)
+	for (int y = 0; y < H; y++) {
+		for (int x = 0; x < W; x++) {
+			glm::vec3 dirCamera((x - W / 2.0f) / f, -(y - H / 2.0f) / f, -1.0f);
+			glm::vec3 direction = glm::normalize(camera.orientation * dirCamera);
+			RayTriangleIntersection hit = scene.intersect(camera.position, direction);
+			float surfaceDist = hit.hit ? hit.distanceFromCamera : 20.0f;
+			glm::vec3 surfaceCol = traceRay(camera.position, direction, scene, used, ShadingModel::Phong, 4);
+			// March the fog: accumulate single-scattered, shadow-tested light so
+			// beams form visible shafts where the light is not occluded.
+			glm::vec3 inscatter(0.0f);
+			float transmittance = 1.0f;
+			float dt = surfaceDist / steps;
+			for (int i = 0; i < steps; i++) {
+				glm::vec3 p = camera.position + direction * ((i + 0.5f) * dt);
+				for (const Light &L : used) {
+					glm::vec3 to = L.position - p;
+					float d = glm::length(to);
+					if (!scene.occluded(p, to / d, d, -1)) {
+						float atten = L.intensity / (L.attenConstant + L.attenLinear * d + L.attenQuadratic * d * d);
+						inscatter += transmittance * (density * dt) * L.colour * atten;
+					}
+				}
+				transmittance *= std::exp(-density * dt);
+			}
+			glm::vec3 colour = surfaceCol * transmittance + inscatter * 55.0f;
+			int r = std::min(255, static_cast<int>(colour.r));
+			int g = std::min(255, static_cast<int>(colour.g));
+			int b = std::min(255, static_cast<int>(colour.b));
+			canvas.setPixelColour(x, y, (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
+		}
+	}
+}
+
 void renderPathTraced(const std::vector<ModelTriangle> &model, const Camera &camera, Canvas &canvas, int samples,
                       const std::vector<Light> &lights, float aperture, float focusDistance,
                       const glm::vec3 &cameraMotion, const Primitives &prims) {
@@ -1003,6 +1051,29 @@ void toneMap(Canvas &canvas, float exposure, float gamma) {
 // Bloom: extract pixels brighter than `threshold` (0..1 of full white), blur
 // that bright pass (repeated box blur ~ Gaussian), and add it back scaled by
 // `intensity` so highlights glow into their surroundings.
+AccumBuffer::AccumBuffer(int width, int height)
+    : w_(width), h_(height), count_(0), sum_(static_cast<size_t>(width) * height, glm::vec3(0.0f)) {}
+
+void AccumBuffer::add(const Canvas &canvas) {
+	int n = w_ * h_;
+	for (int i = 0; i < n; i++) {
+		uint32_t p = canvas.pixels[static_cast<size_t>(i)];
+		sum_[static_cast<size_t>(i)] += glm::vec3((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+	}
+	count_++;
+}
+
+void AccumBuffer::resolve(Canvas &out) const {
+	float inv = count_ > 0 ? 1.0f / count_ : 1.0f;
+	for (int i = 0; i < w_ * h_; i++) {
+		glm::vec3 c = sum_[static_cast<size_t>(i)] * inv;
+		int r = std::min(255, static_cast<int>(c.r));
+		int g = std::min(255, static_cast<int>(c.g));
+		int b = std::min(255, static_cast<int>(c.b));
+		out.pixels[static_cast<size_t>(i)] = (255u << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+	}
+}
+
 void applyBloom(Canvas &canvas, float threshold, float intensity) {
 	int W = static_cast<int>(canvas.width);
 	int H = static_cast<int>(canvas.height);
