@@ -47,7 +47,7 @@ Do this once per registry. After it is done, every future release publishes auto
    - Owner: `ReverseZoom2151`
    - Repository: `rednoise`
    - Workflow: `release.yml`
-   - Environment: optional (leave blank unless you configured one)
+   - Environment: `pypi` (the python-publish job sets `environment: pypi`, so this must match exactly)
 3. No API token or repo secret is required. Publishing uses OIDC (`id-token: write`).
 
 Reference: https://docs.pypi.org/trusted-publishers/
