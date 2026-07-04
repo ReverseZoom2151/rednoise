@@ -238,6 +238,65 @@ The code uses the OpenCL 1.2 API subset for the broadest reach but runs on newer
 runtimes (3.0, etc.) at full speed. Require a newer runtime by raising the target
 level: `cmake -B build -DBUILD_GPU=ON -DOPENCL_TARGET_VERSION=300`.
 
+## Using it from C++
+
+The engine is a plain C++ library: load a mesh, aim a camera, pick a render mode,
+and save the result. No SDL, window, or GPU is involved.
+
+```cpp
+#include "Camera.h"
+#include "ObjLoader.h"
+#include "Renderer.h"
+#include <Canvas.h>
+#include <glm/glm.hpp>
+#include <vector>
+
+int main() {
+    std::vector<ModelTriangle> scene = loadOBJ("assets/cornell-box.obj", 0.35f);
+
+    Camera camera(640, 480, 2.0f, glm::vec3(0.0f, 0.0f, 4.0f));
+    camera.lookAt(glm::vec3(0.0f));
+
+    Canvas canvas(640, 480);
+    renderPathTraced(scene, camera, canvas, 128); // 128 samples/pixel, global illumination
+    canvas.savePPM("cornell.ppm");
+}
+```
+
+You can also build a scene from analytic primitives (spheres, planes, ellipsoids,
+cylinders, cones) with no mesh at all, place lights, and choose a shading model:
+
+```cpp
+#include "Camera.h"
+#include "Light.h"
+#include "Renderer.h"
+#include "Scene.h" // Primitives
+#include <Canvas.h>
+#include <glm/glm.hpp>
+
+int main() {
+    Primitives prims;
+    prims.planes.push_back({{0, -1, 0}, {0, 1, 0}, Colour(180, 180, 180), Material::Diffuse, 0.2f});
+    prims.spheres.push_back({{0, -0.3f, 0}, 0.6f, Colour(255, 255, 255), Material::Glass, 0.0f});
+
+    Light light;
+    light.position = {2.0f, 3.0f, 3.0f};
+    light.intensity = 80.0f;
+
+    Camera camera(640, 480, 2.0f, glm::vec3(0.0f, 0.4f, 4.5f));
+    camera.lookAt(glm::vec3(0.0f, -0.3f, 0.0f));
+
+    Canvas canvas(640, 480);
+    renderRaytraced({}, camera, canvas, ShadingModel::Phong, {light}, prims);
+    canvas.savePPM("glass.ppm");
+}
+```
+
+Every render mode takes the same `(scene, camera, canvas, ...)` shape and writes
+into a `Canvas` you can save as PPM or hand to your own display: `renderWireframe`,
+`renderRasterised`, `renderRaytraced`, `renderPathTraced`, `renderPhotonMapped`,
+`renderRadiosity`, `renderBidirectional`, and `renderMetropolis`.
+
 ## Using it as a library (C API)
 
 The engine installs as a self-contained library with a stable C ABI
