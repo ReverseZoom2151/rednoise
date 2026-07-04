@@ -1,0 +1,30 @@
+# Build outputs
+build/
+build-*/
+cmake-build-*/
+out/
+
+# Version control and CI
+.git/
+.github/
+.gitignore
+
+# Non-essential extras and generated media
+extras/
+gallery/
+examples/output/
+*.ppm
+*.bmp
+*.png
+
+# Language bindings build artifacts
+bindings/target/
+bindings/**/target/
+__pycache__/
+*.pyc
+node_modules/
+
+# Editor and OS cruft
+.vscode/
+.idea/
+.DS_Store
