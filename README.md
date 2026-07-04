@@ -1,21 +1,21 @@
-# RedNoise — Graphics Rendering Toolkit
+# RedNoise: Graphics Rendering Toolkit
 
 A small **C++ software rasteriser** built while working through the fundamentals of
-computer graphics. It draws directly into a pixel buffer — no GPU, no OpenGL — and
+computer graphics. It draws directly into a pixel buffer (no GPU, no OpenGL) and
 presents it with **SDL3**, using **glm** for vector/matrix maths. It's an educational
 codebase: each feature is a self-contained step, from setting individual pixels to
 loading and colouring OBJ models.
 
 ## Features
 
-- **Direct pixel manipulation** — the "red noise" demo that gives the project its name.
-- **Interpolation** — single-float and 3-element (vec3) linear interpolation, used for
+- **Direct pixel manipulation**: the "red noise" demo that gives the project its name.
+- **Interpolation**: single-float and 3-element (vec3) linear interpolation, used for
   greyscale and 2D colour gradients.
-- **Drawing primitives** — DDA line drawing; stroked, filled, and random triangles.
-- **Texture mapping** — affine texture-mapped triangles sampled from a PPM image.
-- **OBJ / MTL loading** — parses Wavefront `.obj` geometry and resolves its `.mtl`
+- **Drawing primitives**: DDA line drawing; stroked, filled, and random triangles.
+- **Texture mapping**: affine texture-mapped triangles sampled from a PPM image.
+- **OBJ / MTL loading**: parses Wavefront `.obj` geometry and resolves its `.mtl`
   material colours (`mtllib` / `usemtl`).
-- **Interactive window** — SDL3 event handling for keyboard/mouse input and PPM/BMP
+- **Interactive window**: SDL3 event handling for keyboard/mouse input and PPM/BMP
   screenshots.
 
 ## Project structure
@@ -41,7 +41,7 @@ redNoise/
 | Dependency | Version | How it's provided |
 |------------|---------|-------------------|
 | [SDL3](https://www.libsdl.org) | 3.x | System library (vcpkg / package manager) |
-| [glm](https://github.com/g-truc/glm) | 1.0.1 | Vendored in `third_party/glm` — nothing to install |
+| [glm](https://github.com/g-truc/glm) | 1.0.1 | Vendored in `third_party/glm` (nothing to install) |
 
 A C++17 compiler is required.
 
@@ -83,7 +83,7 @@ make clean
 |-------|--------|
 | `u` | Draw a random stroked triangle |
 | `f` | Draw a random filled triangle |
-| Arrow keys | Print direction (camera hooks — reserved) |
+| Arrow keys | Print direction (camera hooks, reserved) |
 | Mouse click | Save the frame to `output.ppm` and `output.bmp` |
 | `Esc` | Quit |
 
@@ -91,8 +91,8 @@ make clean
 
 The framework, primitives, texture mapping, and OBJ/MTL loading are in place; the
 Cornell box is parsed (with materials) at startup. Projecting and rasterising that
-3D geometry — perspective projection, a depth buffer, a movable camera, and on
-toward a ray tracer with shadows and lighting — is the intended next step.
+3D geometry (perspective projection, a depth buffer, a movable camera, and on
+toward a ray tracer with shadows and lighting) is the intended next step.
 
 ## Credits
 
