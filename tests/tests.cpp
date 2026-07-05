@@ -9,6 +9,8 @@
 #include "Aniso.h"
 #include "BCn.h"
 #include "Bezier.h"
+#include "Bloom.h"
+#include "Blur.h"
 #include "Drawing.h"
 #include "Blackbody.h"
 #include "IrradianceCache.h"
@@ -521,6 +523,29 @@ static void testDeepScanModules() {
 	CHECK(mips.size() == 7);
 	glm::vec4 aniso = sampleAnisotropic(mips, 0.3f, 0.3f, glm::vec2(0.4f, 0.0f), glm::vec2(0.0f, 0.002f), 8);
 	CHECK(aniso.r >= 0.0f && aniso.r <= 255.0f && aniso.g >= 0.0f && aniso.g <= 255.0f);
+
+	// Fast blur: a running-sum box blur spreads a spike's energy to its neighbours
+	// while conserving the total (single H pass).
+	std::vector<float> spike(9, 0.0f);
+	spike[4] = 9.0f;
+	float before = 0.0f;
+	for (float f : spike)
+		before += f;
+	boxBlurH(spike, 9, 1, 1);
+	float after = 0.0f;
+	for (float f : spike)
+		after += f;
+	CHECK(nearly(before, after));                                 // energy conserved
+	CHECK(spike[4] < 9.0f && spike[3] > 0.0f && spike[5] > 0.0f); // spread to neighbours
+
+	// Bloom: a bright block bleeds light into previously-dark neighbouring pixels.
+	Canvas bloomCv(48, 48);
+	for (int yy = 22; yy < 26; yy++)
+		for (int xx = 22; xx < 26; xx++)
+			bloomCv.setPixelColour(xx, yy, 0xFFFFFFFF);
+	applyBloom(bloomCv, 0.8f, 8.0f, 0.8f);
+	CHECK((bloomCv.pixels[18 * 48 + 24] & 0xFF) > 0); // a dark pixel a few px away now lit
+	CHECK((bloomCv.pixels[0] & 0xFF) == 0);           // a far corner stays dark
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

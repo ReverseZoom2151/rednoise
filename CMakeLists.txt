@@ -136,6 +136,8 @@ set(ENGINE_SOURCES
         src/Tessellator.cpp
         src/HalfEdge.cpp
         src/Aniso.cpp
+        src/Blur.cpp
+        src/Bloom.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
