@@ -31,6 +31,7 @@
 #include "Scene.h"
 #include "SceneGraph.h"
 #include "Sky.h"
+#include "Tessellator.h"
 #include "Tonemap.h"
 #include "Transform.h"
 #include "Voxel.h"
@@ -39,6 +40,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <Utils.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <glm/glm.hpp>
 #include <iostream>
@@ -471,6 +473,16 @@ static void testDeepScanModules() {
 	CHECK((out[0] & 0xFFFFFF) == 0xFFFFFF);                 // index 0 -> c0 white
 	CHECK((out[1] & 0xFFFFFF) == 0x000000);                 // index 1 -> c1 black
 	CHECK((out[2] & 0xFF) == 170 && (out[3] & 0xFF) == 85); // 2/3 and 1/3 greys
+
+	// Adaptive tessellator: quad domain has u*v points and 2*(u-1)*(v-1) triangles,
+	// with independent per-axis factors.
+	CHECK(tessellateQuadDomain(5, 5).size() == 25);
+	CHECK(quadDomainTriangles(5, 5).size() == 32);
+	std::array<glm::vec3, 16> flat{};
+	for (int r = 0; r < 4; r++)
+		for (int c = 0; c < 4; c++)
+			flat[r * 4 + c] = glm::vec3(c / 3.0f, 0.0f, r / 3.0f);
+	CHECK(adaptiveTessellateBezier(flat, 7, 3, Colour(100, 100, 100)).size() == static_cast<size_t>(2 * 6 * 2));
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

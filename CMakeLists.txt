@@ -133,6 +133,7 @@ set(ENGINE_SOURCES
         src/Resample.cpp
         src/Quaternion.cpp
         src/BCn.cpp
+        src/Tessellator.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
