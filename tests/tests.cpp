@@ -12,6 +12,7 @@
 #include "IrradianceCache.h"
 #include "QMC.h"
 #include "ColourUtil.h"
+#include "Frustum.h"
 #include "Grid.h"
 #include "KdTree.h"
 #include "Lines.h"
@@ -419,6 +420,16 @@ static void testDeepScanModules() {
 	decodeMorton3(encodeMorton3(123, 456, 789), ex, ey, ez);
 	CHECK(ex == 123 && ey == 456 && ez == 789);
 	CHECK(encodeMorton2(1, 0) == 1 && encodeMorton2(0, 1) == 2); // interleave: x low bit, y next
+
+	// Frustum culling: extract planes from a perspective*lookAt view-projection.
+	glm::mat4 proj = glm::perspective(glm::radians(60.0f), 4.0f / 3.0f, 0.1f, 100.0f);
+	glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 5), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	Frustum fr = extractFrustum(proj * view);
+	CHECK(pointInside(fr, glm::vec3(0, 0, 0)));   // in front -> inside
+	CHECK(!pointInside(fr, glm::vec3(0, 0, 50))); // behind camera -> outside
+	CHECK(testAABB(fr, glm::vec3(0, 0, 0), glm::vec3(0.5f)) != Cull::Outside);
+	CHECK(testAABB(fr, glm::vec3(0, 0, 50), glm::vec3(0.5f)) == Cull::Outside);   // far behind
+	CHECK(testAABB(fr, glm::vec3(1000, 0, 0), glm::vec3(0.5f)) == Cull::Outside); // way off to the side
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.
