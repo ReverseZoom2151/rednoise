@@ -12,6 +12,7 @@
 #include "IrradianceCache.h"
 #include "QMC.h"
 #include "ColourUtil.h"
+#include "Resample.h"
 #include "Frustum.h"
 #include "Grid.h"
 #include "KdTree.h"
@@ -430,6 +431,22 @@ static void testDeepScanModules() {
 	CHECK(testAABB(fr, glm::vec3(0, 0, 0), glm::vec3(0.5f)) != Cull::Outside);
 	CHECK(testAABB(fr, glm::vec3(0, 0, 50), glm::vec3(0.5f)) == Cull::Outside);   // far behind
 	CHECK(testAABB(fr, glm::vec3(1000, 0, 0), glm::vec3(0.5f)) == Cull::Outside); // way off to the side
+
+	// Lanczos resampling: kernel is 1 at 0, zero at nonzero integers and outside
+	// the window; upsampling preserves endpoints and stays bounded (no overshoot escape).
+	CHECK(nearly(lanczosKernel(0.0f, 3), 1.0f));
+	CHECK(std::abs(lanczosKernel(1.0f, 3)) < 1e-5f && std::abs(lanczosKernel(2.0f, 3)) < 1e-5f);
+	CHECK(lanczosKernel(3.5f, 3) == 0.0f && lanczosKernel(-4.0f, 3) == 0.0f); // outside window
+	std::vector<uint32_t> ramp(8);
+	for (int i = 0; i < 8; i++) {
+		int g = i * 255 / 7;
+		ramp[i] = (255u << 24) | (g << 16) | (g << 8) | g;
+	}
+	std::vector<uint32_t> upRamp = resampleLanczos(ramp, 8, 1, 32, 1, 3);
+	CHECK(upRamp.size() == 32);
+	CHECK((upRamp.front() & 0xFF) == 0 && (upRamp.back() & 0xFF) == 255); // endpoints preserved
+	for (uint32_t px : upRamp)
+		CHECK((px & 0xFF) <= 255); // bounded, no overshoot beyond byte range
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

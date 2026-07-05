@@ -130,6 +130,7 @@ set(ENGINE_SOURCES
         src/Worley.cpp
         src/Morton.cpp
         src/Frustum.cpp
+        src/Resample.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
