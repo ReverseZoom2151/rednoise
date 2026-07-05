@@ -32,14 +32,24 @@ FRAMEWORK_SRCS=(
 )
 
 ENGINE_SRCS=(
+	src/Aniso.cpp
+	src/BCn.cpp
 	src/BDPT.cpp
 	src/BVH.cpp
+	src/Bezier.cpp
+	src/Blackbody.cpp
+	src/Bloom.cpp
+	src/Blur.cpp
 	src/Camera.cpp
 	src/capi.cpp
 	src/Clouds.cpp
 	src/ColourUtil.cpp
 	src/Drawing.cpp
+	src/EdgeRaster.cpp
+	src/Frustum.cpp
 	src/Geometry.cpp
+	src/Grid.cpp
+	src/HalfEdge.cpp
 	src/Interpolation.cpp
 	src/IrradianceCache.cpp
 	src/KdTree.cpp
@@ -48,6 +58,7 @@ ENGINE_SRCS=(
 	src/Meshing.cpp
 	src/Metropolis.cpp
 	src/Mipmap.cpp
+	src/Morton.cpp
 	src/Noise.cpp
 	src/Nurbs.cpp
 	src/ObjLoader.cpp
@@ -55,12 +66,19 @@ ENGINE_SRCS=(
 	src/OceanFFT.cpp
 	src/Octree.cpp
 	src/Photon.cpp
+	src/QMC.cpp
+	src/Quaternion.cpp
 	src/Radiosity.cpp
 	src/Renderer.cpp
+	src/Resample.cpp
 	src/Scene.cpp
 	src/SceneGraph.cpp
+	src/Sky.cpp
+	src/Tessellator.cpp
+	src/Tonemap.cpp
 	src/Transform.cpp
 	src/Voxel.cpp
+	src/Worley.cpp
 )
 
 emcc \
