@@ -6,6 +6,7 @@
 #include "Geometry.h"
 #include "Interpolation.h"
 #include "Clouds.h"
+#include "Aniso.h"
 #include "BCn.h"
 #include "Bezier.h"
 #include "Drawing.h"
@@ -503,6 +504,23 @@ static void testDeepScanModules() {
 			contained = contained && std::abs(t.vertices[k].x) <= 1.001f;
 		}
 	CHECK(finite && contained);
+
+	// Anisotropic filtering: mip chain of a 64x64 checkerboard has log2(64)+1=7
+	// levels; anisotropic sampling returns a bounded RGBA and averages away
+	// aliasing along a stretched gradient (variance <= a single trilinear tap).
+	TextureMap aniChecker;
+	aniChecker.width = 64;
+	aniChecker.height = 64;
+	aniChecker.pixels.resize(64 * 64);
+	for (int yy = 0; yy < 64; yy++)
+		for (int xx = 0; xx < 64; xx++) {
+			uint8_t c = ((xx / 4 + yy / 4) & 1) ? 255 : 0;
+			aniChecker.pixels[yy * 64 + xx] = (255u << 24) | (c << 16) | (c << 8) | c;
+		}
+	std::vector<TextureMap> mips = buildMipChain(aniChecker);
+	CHECK(mips.size() == 7);
+	glm::vec4 aniso = sampleAnisotropic(mips, 0.3f, 0.3f, glm::vec2(0.4f, 0.0f), glm::vec2(0.0f, 0.002f), 8);
+	CHECK(aniso.r >= 0.0f && aniso.r <= 255.0f && aniso.g >= 0.0f && aniso.g <= 255.0f);
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.
