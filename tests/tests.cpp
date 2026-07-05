@@ -29,6 +29,7 @@
 #include "Tonemap.h"
 #include "Transform.h"
 #include "Voxel.h"
+#include "Worley.h"
 #include <Canvas.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <Utils.h>
@@ -397,6 +398,14 @@ static void testDeepScanModules() {
 	CHECK(std::abs(valueNoise(vp) - valueNoise(vp + glm::vec3(0.001f, 0, 0))) < 0.05f); // continuous
 	CHECK(std::abs(valueNoise(vp) - fractalNoise(vp, 1)) > 1e-3f);                      // not the same as gradient
 	CHECK(fractalValueNoise(vp, 5) >= 0.0f && fractalValueNoise(vp, 5) <= 1.0f);
+
+	// Worley (cellular) noise: f1 <= f2, non-negative, cells value in [0,1].
+	WorleyResult wr = worley(glm::vec2(3.3f, 7.1f));
+	CHECK(wr.f1 >= 0.0f && wr.f1 <= wr.f2);
+	CHECK(worleyCells(glm::vec2(3.3f, 7.1f)) >= 0.0f && worleyCells(glm::vec2(3.3f, 7.1f)) <= 1.0f);
+	CHECK(std::abs(worleyF1(glm::vec2(3.3f, 7.1f)) - worleyF1(glm::vec2(3.301f, 7.1f))) < 0.05f); // continuous
+	WorleyResult wr3 = worley(glm::vec3(1.2f, 3.4f, 5.6f));
+	CHECK(wr3.f1 >= 0.0f && wr3.f1 <= wr3.f2);
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

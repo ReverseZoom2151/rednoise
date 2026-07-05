@@ -127,6 +127,7 @@ set(ENGINE_SOURCES
         src/Bezier.cpp
         src/Sky.cpp
         src/Tonemap.cpp
+        src/Worley.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
