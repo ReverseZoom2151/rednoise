@@ -12,6 +12,7 @@
 #include "Bloom.h"
 #include "Blur.h"
 #include "Drawing.h"
+#include "EdgeRaster.h"
 #include "Blackbody.h"
 #include "IrradianceCache.h"
 #include "QMC.h"
@@ -546,6 +547,21 @@ static void testDeepScanModules() {
 	applyBloom(bloomCv, 0.8f, 8.0f, 0.8f);
 	CHECK((bloomCv.pixels[18 * 48 + 24] & 0xFF) > 0); // a dark pixel a few px away now lit
 	CHECK((bloomCv.pixels[0] & 0xFF) == 0);           // a far corner stays dark
+
+	// Edge-function rasteriser: orient2d sign encodes winding; a near triangle
+	// occludes a farther one via the depth test.
+	CHECK(orient2d(0, 0, 10, 0, 0, 10) > 0); // CCW positive area
+	CHECK(orient2d(0, 0, 0, 10, 10, 0) < 0); // CW negative
+	Canvas erCv(64, 64);
+	std::vector<float> erDepth, erHiZ;
+	clearDepth(erDepth, erHiZ, 64, 64);
+	rasterizeTriangle(erCv, erDepth, erHiZ, glm::vec3(10, 10, 5.0f), glm::vec3(54, 10, 5.0f), glm::vec3(32, 54, 5.0f),
+	                  0xFFFF0000); // far red
+	rasterizeTriangle(erCv, erDepth, erHiZ, glm::vec3(10, 10, 2.0f), glm::vec3(54, 10, 2.0f), glm::vec3(32, 54, 2.0f),
+	                  0xFF00FF00);                             // near green over the same pixels
+	CHECK((erCv.pixels[30 * 64 + 32] & 0x00FF00) == 0x00FF00); // green (nearer) wins
+	CHECK((erCv.pixels[30 * 64 + 32] & 0xFF0000) == 0);        // red overwritten
+	CHECK(erDepth[30 * 64 + 32] < 5.0f);                       // depth is the near value
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

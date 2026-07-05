@@ -138,6 +138,7 @@ set(ENGINE_SOURCES
         src/Aniso.cpp
         src/Blur.cpp
         src/Bloom.cpp
+        src/EdgeRaster.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
