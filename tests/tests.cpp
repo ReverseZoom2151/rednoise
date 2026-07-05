@@ -12,6 +12,7 @@
 #include "IrradianceCache.h"
 #include "QMC.h"
 #include "ColourUtil.h"
+#include "Quaternion.h"
 #include "Resample.h"
 #include "Frustum.h"
 #include "Grid.h"
@@ -447,6 +448,19 @@ static void testDeepScanModules() {
 	CHECK((upRamp.front() & 0xFF) == 0 && (upRamp.back() & 0xFF) == 255); // endpoints preserved
 	for (uint32_t px : upRamp)
 		CHECK((px & 0xFF) <= 255); // bounded, no overshoot beyond byte range
+
+	// Quaternion: rotating x by 90deg about +z gives +y; rotate matches matrix form;
+	// slerp endpoints are exact.
+	glm::vec4 qz = quatFromAxisAngle(glm::vec3(0, 0, 1), glm::radians(90.0f));
+	glm::vec3 rotated = quatRotate(qz, glm::vec3(1, 0, 0));
+	CHECK(nearly(rotated.x, 0.0f) && nearly(rotated.y, 1.0f) && nearly(rotated.z, 0.0f));
+	glm::vec3 viaMat = quatToMat3(qz) * glm::vec3(1, 0, 0);
+	CHECK(nearly(viaMat.x, rotated.x) && nearly(viaMat.y, rotated.y) && nearly(viaMat.z, rotated.z));
+	glm::vec4 qa = quatFromAxisAngle(glm::vec3(0, 1, 0), 0.3f), qb = quatFromAxisAngle(glm::vec3(0, 1, 0), 1.2f);
+	glm::vec4 s0 = slerp(qa, qb, 0.0f), s1 = slerp(qa, qb, 1.0f);
+	CHECK(nearly(std::abs(glm::dot(s0, qa)), 1.0f) && nearly(std::abs(glm::dot(s1, qb)), 1.0f));
+	glm::mat3 on = orthonormalize(glm::mat3(glm::vec3(1, 0.01f, 0), glm::vec3(0, 1, 0.02f), glm::vec3(0.03f, 0, 1)));
+	CHECK(nearly(glm::length(on[0]), 1.0f) && nearly(glm::dot(on[0], on[1]), 0.0f));
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.
