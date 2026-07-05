@@ -17,6 +17,7 @@
 #include "Resample.h"
 #include "Frustum.h"
 #include "Grid.h"
+#include "HalfEdge.h"
 #include "KdTree.h"
 #include "Lines.h"
 #include "Materials.h"
@@ -483,6 +484,25 @@ static void testDeepScanModules() {
 		for (int c = 0; c < 4; c++)
 			flat[r * 4 + c] = glm::vec3(c / 3.0f, 0.0f, r / 3.0f);
 	CHECK(adaptiveTessellateBezier(flat, 7, 3, Colour(100, 100, 100)).size() == static_cast<size_t>(2 * 6 * 2));
+
+	// Loop subdivision: a tetrahedron (4 tris) grows 4x per level and stays finite,
+	// contained within the original bounding box (convex smoothing shrinks inward).
+	std::vector<ModelTriangle> tet;
+	glm::vec3 A(1, 1, 1), B(1, -1, -1), C(-1, 1, -1), D(-1, -1, 1);
+	Colour tc(200, 180, 160);
+	tet.push_back(ModelTriangle(A, C, B, tc));
+	tet.push_back(ModelTriangle(A, B, D, tc));
+	tet.push_back(ModelTriangle(A, D, C, tc));
+	tet.push_back(ModelTriangle(B, C, D, tc));
+	std::vector<ModelTriangle> sub = halfedge::loopSubdivide(tet, 2, tc);
+	CHECK(sub.size() == 4u * 16u); // 4 tris -> x4 per level, 2 levels
+	bool finite = true, contained = true;
+	for (const ModelTriangle &t : sub)
+		for (int k = 0; k < 3; k++) {
+			finite = finite && std::isfinite(t.vertices[k].x);
+			contained = contained && std::abs(t.vertices[k].x) <= 1.001f;
+		}
+	CHECK(finite && contained);
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

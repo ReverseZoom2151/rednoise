@@ -134,6 +134,7 @@ set(ENGINE_SOURCES
         src/Quaternion.cpp
         src/BCn.cpp
         src/Tessellator.cpp
+        src/HalfEdge.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
