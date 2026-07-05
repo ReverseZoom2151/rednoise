@@ -6,6 +6,7 @@
 #include "Geometry.h"
 #include "Interpolation.h"
 #include "Clouds.h"
+#include "BCn.h"
 #include "Bezier.h"
 #include "Drawing.h"
 #include "Blackbody.h"
@@ -461,6 +462,15 @@ static void testDeepScanModules() {
 	CHECK(nearly(std::abs(glm::dot(s0, qa)), 1.0f) && nearly(std::abs(glm::dot(s1, qb)), 1.0f));
 	glm::mat3 on = orthonormalize(glm::mat3(glm::vec3(1, 0.01f, 0), glm::vec3(0, 1, 0.02f), glm::vec3(0.03f, 0, 1)));
 	CHECK(nearly(glm::length(on[0]), 1.0f) && nearly(glm::dot(on[0], on[1]), 0.0f));
+
+	// BCn/DXT decode: a BC1 block with white c0, black c1 and mixed indices
+	// decodes to white / black / the two interpolated greys.
+	uint8_t bc1[8] = {0xFF, 0xFF, 0x00, 0x00, 0b11100100, 0x00, 0x00, 0x00}; // indices 0,1,2,3 in first row
+	uint32_t out[16];
+	decodeBC1Block(bc1, out);
+	CHECK((out[0] & 0xFFFFFF) == 0xFFFFFF);                 // index 0 -> c0 white
+	CHECK((out[1] & 0xFFFFFF) == 0x000000);                 // index 1 -> c1 black
+	CHECK((out[2] & 0xFF) == 170 && (out[3] & 0xFF) == 85); // 2/3 and 1/3 greys
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

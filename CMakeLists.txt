@@ -132,6 +132,7 @@ set(ENGINE_SOURCES
         src/Frustum.cpp
         src/Resample.cpp
         src/Quaternion.cpp
+        src/BCn.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
