@@ -14,7 +14,7 @@
 #   ./build/render_headless     # writes render-*.ppm
 
 cmake_minimum_required(VERSION 3.24) # FetchContent FIND_PACKAGE_ARGS (find-first-then-fetch)
-project(RedNoise VERSION 0.1.2 LANGUAGES C CXX)
+project(RedNoise VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

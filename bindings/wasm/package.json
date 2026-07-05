@@ -1,6 +1,6 @@
 {
   "name": "rednoise",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "WebAssembly build of the RedNoise CPU software renderer (wireframe, rasteriser, ray tracer, path tracer).",
   "type": "module",
   "license": "MIT",
