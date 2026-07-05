@@ -18,6 +18,7 @@
 #include "Materials.h"
 #include "Meshing.h"
 #include "Mipmap.h"
+#include "Morton.h"
 #include "Noise.h"
 #include "Nurbs.h"
 #include "ObjLoader.h"
@@ -406,6 +407,18 @@ static void testDeepScanModules() {
 	CHECK(std::abs(worleyF1(glm::vec2(3.3f, 7.1f)) - worleyF1(glm::vec2(3.301f, 7.1f))) < 0.05f); // continuous
 	WorleyResult wr3 = worley(glm::vec3(1.2f, 3.4f, 5.6f));
 	CHECK(wr3.f1 >= 0.0f && wr3.f1 <= wr3.f2);
+
+	// Morton codes: encode/decode round-trips (2D + 3D).
+	for (uint32_t mx = 0; mx < 300; mx += 37)
+		for (uint32_t my = 0; my < 300; my += 41) {
+			uint32_t dx, dy;
+			decodeMorton2(encodeMorton2(mx, my), dx, dy);
+			CHECK(dx == mx && dy == my);
+		}
+	uint32_t ex, ey, ez;
+	decodeMorton3(encodeMorton3(123, 456, 789), ex, ey, ez);
+	CHECK(ex == 123 && ey == 456 && ez == 789);
+	CHECK(encodeMorton2(1, 0) == 1 && encodeMorton2(0, 1) == 2); // interleave: x low bit, y next
 
 	// Tonemap / exposure: 1 stop doubles, ACES maps 0->0 and saturates high, sRGB
 	// brightens midtones and round-trips.

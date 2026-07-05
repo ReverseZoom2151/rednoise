@@ -128,6 +128,7 @@ set(ENGINE_SOURCES
         src/Sky.cpp
         src/Tonemap.cpp
         src/Worley.cpp
+        src/Morton.cpp
         framework/Canvas.cpp
         framework/CanvasPoint.cpp
         framework/CanvasTriangle.cpp
